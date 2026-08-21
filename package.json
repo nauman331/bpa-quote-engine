@@ -1,0 +1,32 @@
+{
+  "name": "bpa-quote-engine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nauman331/bpa-quote-engine.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nauman331/bpa-quote-engine/issues"
+  },
+  "homepage": "https://github.com/nauman331/bpa-quote-engine#readme",
+  "dependencies": {
+    "@azure/msal-node": "^5.6.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "docxtemplater": "^3.69.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "isomorphic-fetch": "^3.0.0",
+    "joi": "^18.2.5",
+    "nodemon": "^3.1.14",
+    "pizzip": "^3.2.0"
+  }
+}
