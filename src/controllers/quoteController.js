@@ -70,14 +70,12 @@ const { sendQuoteEmail } = require('../services/mailService');
 
 const handleGenerateAndSend = async (req, res) => {
     try {
-        // 1. Validate Input
         const validation = validateQuoteData(req.body);
         if (!validation.isValid) {
             return res.status(400).json({ status: 'error', message: validation.errors });
         }
         const validatedData = validation.data;
 
-        // 2. Exact Naming 
         const canonicalTitle = buildCanonicalTitle(
             validatedData.brand,
             validatedData.tier,
@@ -86,10 +84,8 @@ const handleGenerateAndSend = async (req, res) => {
         );
         const pdfFileName = buildPdfFileName(canonicalTitle);
 
-        // 3. Mock PDF Buffer (For Email Test)
         const mockPdfBuffer = Buffer.from('This is a test PDF document for the Graph API send check.', 'utf8');
 
-        // 4. Dispatch Email via Microsoft Graph (M2)
         console.log(`[M2] Dispatching email for ${canonicalTitle}...`);
         await sendQuoteEmail(
             validatedData.brand,
@@ -99,7 +95,6 @@ const handleGenerateAndSend = async (req, res) => {
             mockPdfBuffer
         );
 
-        // 5. Return Success
         return res.status(200).json({
             status: 'success',
             message: 'M2 Pipeline Complete: Live Email Dispatched via Graph API',

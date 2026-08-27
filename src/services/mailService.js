@@ -68,7 +68,8 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
     }
 
     // 2. Determine Routing based on Brand
-    const isBrisbane = brand.toLowerCase().includes('brisbane');
+    // Check for both 'brisbane' and 'bpa'
+    const isBrisbane = brand.toLowerCase().includes('brisbane') || brand.toLowerCase() === 'bpa';
     const senderAddress = isBrisbane ? process.env.BPA_SALES_EMAIL : process.env.GCPA_SALES_EMAIL;
     const hubspotBcc = isBrisbane ? process.env.BPA_HUBSPOT_BCC : process.env.GCPA_HUBSPOT_BCC;
 
