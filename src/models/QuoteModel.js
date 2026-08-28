@@ -2,6 +2,7 @@ const Joi = require('joi');
 
 const quoteSchema = Joi.object({
     brand: Joi.string().valid('BPA', 'GCPA').required(),
+    productFamily: Joi.string().required(),
     tier: Joi.string().valid('DD', 'ED', 'FD', 'Ultra', 'Spider', 'Satellite').default('DD'),
     clientName: Joi.string().required(),
     projectName: Joi.string().required(),

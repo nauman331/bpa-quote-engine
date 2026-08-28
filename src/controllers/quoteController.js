@@ -1,118 +1,57 @@
-// const fs = require('fs');
-// const path = require('path');
-// const { validateQuoteData } = require('../models/quoteModel');
-// const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
-// const { populateTemplate, convertDocxToPdfMock } = require('../services/documentService');
-// const { saveToArchive } = require('../services/archiveService');
-
-// const handleGenerateAndSend = async (req, res) => {
-//     try {
-//         // 1. Validate Input
-//         const validation = validateQuoteData(req.body);
-//         if (!validation.isValid) {
-//             return res.status(400).json({ status: 'error', message: validation.errors });
-//         }
-//         const validatedData = validation.data;
-
-//         // 2. Exact Naming 
-//         const canonicalTitle = buildCanonicalTitle(
-//             validatedData.brand,
-//             validatedData.tier,
-//             validatedData.clientName,
-//             validatedData.projectName
-//         );
-//         const pdfFileName = buildPdfFileName(canonicalTitle);
-
-//         // 3. Document Generation
-//         // Fetch the dummy template from our local folder
-//         const templatePath = path.join(__dirname, '../views/templates/Mobile-DD-Template.docx');
-//         if (!fs.existsSync(templatePath)) {
-//             return res.status(500).json({ error: 'Dummy template not found. Please place Mobile-DD-Template.docx in src/views/templates/' });
-//         }
-
-//         const templateBuffer = fs.readFileSync(templatePath);
-//         const populatedDocxBuffer = populateTemplate(templateBuffer, validatedData);
-
-//         // 4. Convert to PDF (Mocked for now)
-//         const pdfBuffer = await convertDocxToPdfMock(populatedDocxBuffer);
-
-//         // 5. Archive the PDF (Rule 16)
-//         const savedFilePath = saveToArchive(validatedData.brand, validatedData.tier, pdfFileName, pdfBuffer);
-
-//         // 6. Return Success
-//         return res.status(200).json({
-//             status: 'success',
-//             message: 'M1 Pipeline Complete: Document Generated and Archived',
-//             data: {
-//                 canonicalTitle,
-//                 pdfFileName,
-//                 savedFilePath
-//             }
-//         });
-
-//     } catch (err) {
-//         console.error('Quote Pipeline Error:', err);
-//         return res.status(500).json({
-//             status: 'error',
-//             message: err.message || 'Internal server error'
-//         });
-//     }
-// };
-
-// module.exports = {
-//     handleGenerateAndSend
-// };
-
-
 const { validateQuoteData } = require('../models/quoteModel');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
+const { generateQuotePdf } = require('../services/documentService');
+const { uploadPdfToArchive, downloadTemplate } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
 
 const handleGenerateAndSend = async (req, res) => {
     try {
+        // 1. Ingest & Validate Incoming Lead Data (M0)
         const validation = validateQuoteData(req.body);
         if (!validation.isValid) {
             return res.status(400).json({ status: 'error', message: validation.errors });
         }
-        const validatedData = validation.data;
+        const payload = validation.data;
 
+        // 2. Format Naming Conventions
         const canonicalTitle = buildCanonicalTitle(
-            validatedData.brand,
-            validatedData.tier,
-            validatedData.clientName,
-            validatedData.projectName
+            payload.brand,
+            payload.tier,
+            payload.clientName,
+            payload.projectName
         );
         const pdfFileName = buildPdfFileName(canonicalTitle);
 
-        const mockPdfBuffer = Buffer.from('This is a test PDF document for the Graph API send check.', 'utf8');
+        console.log(`[M0] Ingested live lead for: ${canonicalTitle}`);
 
-        console.log(`[M2] Dispatching email for ${canonicalTitle}...`);
+        // 3. Retrieve Master Template from SharePoint (M1)
+        const templateBuffer = await downloadTemplate(payload.brand, payload.productFamily, payload.tier);
+
+        // 4. Generate Live PDF via Graph (M1)
+        const pdfBuffer = await generateQuotePdf(templateBuffer, payload);
+
+        // 5. Archive to SharePoint/OneDrive (M1)
+        await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
+
+        // 6. Dispatch Email via Graph (M2)
         await sendQuoteEmail(
-            validatedData.brand,
-            validatedData.recipientEmail,
+            payload.brand,
+            payload.recipientEmail,
             canonicalTitle,
             pdfFileName,
-            mockPdfBuffer
+            pdfBuffer
         );
 
         return res.status(200).json({
             status: 'success',
-            message: 'M2 Pipeline Complete: Live Email Dispatched via Graph API',
-            data: {
-                canonicalTitle,
-                pdfFileName
-            }
+            message: 'Complete Pipeline Executed: PDF Generated, Archived, and Emailed.',
+            data: { canonicalTitle, pdfFileName }
         });
 
     } catch (err) {
-        console.error('Quote Pipeline Error:', err);
-        return res.status(500).json({
-            status: 'error',
-            message: err.message || 'Internal server error'
-        });
+        console.error('Pipeline Error:', err);
+        return res.status(500).json({ status: 'error', message: err.message });
     }
 };
 
-module.exports = {
-    handleGenerateAndSend
-};
+module.exports = { handleGenerateAndSend };
