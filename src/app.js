@@ -7,12 +7,14 @@ const startApp = () => {
     app.use(express.json());
 
     app.use('/api/quotes', quoteRoutes);
+    app.get('/', (req, res) => res.status(200).send('BPA Quote Engine API is running.'));
 
     if (process.env.NODE_ENV !== 'production') {
         app.listen(PORT, () => {
             console.log(`BPA Quote Engine running on port ${PORT}`);
         });
     }
+
 
     module.exports = app;
 };
