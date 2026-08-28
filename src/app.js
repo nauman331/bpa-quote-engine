@@ -8,9 +8,13 @@ const startApp = () => {
 
     app.use('/api/quotes', quoteRoutes);
 
-    app.listen(PORT, () => {
-        console.log(`BPA Quote Engine running on port ${PORT}`);
-    });
+    if (process.env.NODE_ENV !== 'production') {
+        app.listen(PORT, () => {
+            console.log(`BPA Quote Engine running on port ${PORT}`);
+        });
+    }
+
+    module.exports = app;
 };
 
 startApp();
