@@ -5,15 +5,21 @@
 const { getGraphToken } = require('./graphAuth');
 
 // Helper to determine the exact folder paths based on the brand and product
+// Helper to determine the exact folder paths based on the brand and product
 const getFolderPaths = (brand, productFamily, tier) => {
     const driveId = brand.toLowerCase().includes('brisbane') || brand.toLowerCase() === 'bpa'
         ? process.env.BPA_DRIVE_ID
         : process.env.GCPA_DRIVE_ID;
 
-    // Example path: Shared/Mobile Rates/DD/Level D Conditions D.docx
-    const templatePath = `Shared/${productFamily}/${tier}/Template.docx`;
+    // 1. Handle the .doc vs .docx discrepancy from your P0 Report
+    const fileExtension = productFamily.includes('Static Line') ? '.doc' : '.docx';
 
-    // Example path: Shared/Mobile Rates/Price List Sent Mobile Pumps
+    // 2. IMPORTANT: Change 'Template' to match your EXACT file name in OneDrive
+    // If your file is named "Level D Conditions D", change the string below!
+    const fileName = `Template${fileExtension}`;
+
+    const templatePath = `Shared/${productFamily}/${tier}/${fileName}`;
+
     const archiveFolderName = productFamily.includes('Mobile') ? 'Price List Sent Mobile Pumps' : 'Price List Sent';
     const archivePath = `Shared/${productFamily}/${archiveFolderName}`;
 
@@ -24,7 +30,9 @@ const downloadTemplate = async (brand, productFamily, tier) => {
     const token = await getGraphToken();
     const { driveId: siteId, templatePath } = getFolderPaths(brand, productFamily, tier);
 
-    // Updated to use /sites/ instead of /drives/
+    // 3. INJECT THE DEBUG LOG HERE
+    console.log('[DEBUG GRAPH FETCH PATH]: Attempting to fetch ->', templatePath);
+
     const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${templatePath}:/content`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
