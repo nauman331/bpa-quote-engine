@@ -1,4 +1,4 @@
-const { mapHubspotToQuotePayload } = require('../services/hubspotService');
+const { processLegacyWebhook } = require('../services/hubspotService');
 const { validateQuoteData } = require('../models/quoteModel');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
 const { downloadTemplate, uploadPdfToArchive } = require('../services/archiveService');
@@ -7,44 +7,32 @@ const { sendQuoteEmail } = require('../services/mailService');
 
 const handleHubspotWebhook = async (req, res) => {
     try {
-        console.log('[M0] Incoming HubSpot Webhook received.');
+        const result = await processLegacyWebhook(req.body);
 
-        // 1. Map the raw third-party data to our standard schema
-        const payload = mapHubspotToQuotePayload(req.body);
+        if (!result.shouldProcess) {
+            return res.status(200).json({ status: 'ignored' });
+        }
 
-        // 2. Validate the mapped payload
-        const validation = validateQuoteData(payload);
+        const validation = validateQuoteData(result.data);
         if (!validation.isValid) {
-            console.error('[M0] Validation Error:', validation.errors);
             return res.status(400).json({ status: 'error', message: validation.errors });
         }
 
-        const validData = validation.data;
-
-        // 3. Format Naming Conventions
+        const payload = validation.data;
         const canonicalTitle = buildCanonicalTitle(
-            validData.brand,
-            validData.tier,
-            validData.clientName,
-            validData.projectName
+            payload.brand,
+            payload.tier,
+            payload.clientName,
+            payload.projectName
         );
         const pdfFileName = buildPdfFileName(canonicalTitle);
+        const templateBuffer = await downloadTemplate(payload.brand, payload.productFamily, payload.tier);
+        const pdfBuffer = await generateQuotePdf(templateBuffer, payload);
 
-        console.log(`[M0] Processing lead for: ${canonicalTitle}`);
-
-        // 4. Retrieve Master Template from SharePoint (M1)
-        const templateBuffer = await downloadTemplate(validData.brand, validData.productFamily, validData.tier);
-
-        // 5. Generate Live PDF via Graph (M1)
-        const pdfBuffer = await generateQuotePdf(templateBuffer, validData);
-
-        // 6. Archive to SharePoint/OneDrive (M1)
-        await uploadPdfToArchive(validData.brand, validData.productFamily, pdfFileName, pdfBuffer);
-
-        // 7. Dispatch Email via Graph (M2)
+        await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
         await sendQuoteEmail(
-            validData.brand,
-            validData.recipientEmail,
+            payload.brand,
+            payload.recipientEmail,
             canonicalTitle,
             pdfFileName,
             pdfBuffer
@@ -55,7 +43,6 @@ const handleHubspotWebhook = async (req, res) => {
             message: 'Pipeline Complete: Lead processed, generated, archived, and emailed.',
             data: { canonicalTitle, pdfFileName }
         });
-
     } catch (error) {
         console.error('[Pipeline Error]:', error);
         return res.status(500).json({ status: 'error', message: error.message });
