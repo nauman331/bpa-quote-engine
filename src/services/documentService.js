@@ -7,20 +7,22 @@ const Docxtemplater = require('docxtemplater');
 const { getGraphToken } = require('./graphAuth');
 
 const processTemplate = (templateBuffer, payload) => {
-    // 1. Smart Routing: If Mobile Rates, return buffer immediately (100% static)
-    if (payload.productFamily === 'Mobile Rates') {
-        console.log('[M1] Mobile Rates detected. Bypassing data injection.');
-        return templateBuffer;
-    }
-
-    // 2. If Static Line, inject the Client and Project names
-    console.log('[M1] Static Line detected. Injecting template variables.');
+    console.log('[M1] Processing template and injecting variables.');
     const zip = new PizZip(templateBuffer);
     const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
+    // Format date to match "d MMM. yy" (e.g., "31 Aug. 26")
+    const formattedDate = new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit'
+    }).format(new Date()).replace(/([a-zA-Z]+)/, '$1.');
+
+    // Inject data for ALL templates
     doc.render({
-        clientName: payload.clientName,
-        projectName: payload.projectName
+        clientName: payload.clientName || '',
+        projectName: payload.projectName || '',
+        date: formattedDate
     });
 
     return doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
@@ -28,9 +30,9 @@ const processTemplate = (templateBuffer, payload) => {
 
 const convertToPdfViaGraph = async (docxBuffer) => {
     const token = await getGraphToken();
-    const siteId = process.env.BPA_DRIVE_ID; // Using the Site ID we saved earlier
+    const siteId = process.env.BPA_DRIVE_ID;
 
-    // 1. Upload temporary docx to Graph (Updated URL)
+    // 1. Upload temporary docx to Graph 
     const tempFileName = `temp_${Date.now()}.docx`;
     const uploadRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Temp/${tempFileName}:/content`, {
         method: 'PUT',
@@ -41,13 +43,13 @@ const convertToPdfViaGraph = async (docxBuffer) => {
     if (!uploadRes.ok) throw new Error(`Temp upload failed: ${await uploadRes.text()}`);
     const uploadData = await uploadRes.json();
 
-    // 2. Download as PDF (Updated URL)
+    // 2. Download as PDF 
     const pdfRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${uploadData.id}/content?format=pdf`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
 
-    // 3. Clean up temporary docx (Updated URL)
+    // 3. Clean up temporary docx 
     await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${uploadData.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }

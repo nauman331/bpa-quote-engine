@@ -27,7 +27,6 @@ const processLegacyWebhook = async (webhookPayload) => {
 
     const rawProperties = await fetchDealProperties(event.objectId);
 
-
     return {
         shouldProcess: true,
         data: {
