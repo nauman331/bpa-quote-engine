@@ -6,7 +6,7 @@ const quoteSchema = Joi.object({
     tier: Joi.string().valid('DD', 'ED', 'FD', 'Ultra', 'Spider', 'Satellite').default('DD'),
     clientName: Joi.string().required(),
     projectName: Joi.string().required(),
-    recipientEmail: Joi.string().email().required(),
+    recipientEmail: Joi.string().email().allow(null).optional(),
     rates: Joi.object().optional()
 });
 

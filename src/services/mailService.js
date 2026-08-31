@@ -106,22 +106,38 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
 
     console.log(`[M2] Sending email from ${senderAddress} to ${recipientEmail}...`);
 
-    // 5. Send the Email
-    const sendRes = await fetch(`https://graph.microsoft.com/v1.0/users/${senderAddress}/sendMail`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${tokenData.access_token}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(messagePayload)
-    });
+    // 5. Send the Email with 429 retry + exponential backoff
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        const sendRes = await fetch(`https://graph.microsoft.com/v1.0/users/${senderAddress}/sendMail`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${tokenData.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(messagePayload)
+        });
 
-    if (!sendRes.ok) {
+        if (sendRes.ok) {
+            console.log('[M2] Email dispatched successfully via MS Graph!');
+            return;
+        }
+
+        if (sendRes.status === 429) {
+            const retryAfter = parseInt(sendRes.headers.get('Retry-After') || '5', 10);
+            const backoff = retryAfter * 1000 * attempt;
+            console.warn(`[M2] 429 Too Many Requests. Retrying in ${backoff / 1000}s (attempt ${attempt}/3)...`);
+            await new Promise(res => setTimeout(res, backoff));
+            lastError = `429 rate limit hit after 3 attempts`;
+            continue;
+        }
+
+        // Any other error — fail immediately
         const errorData = await sendRes.json();
         throw new Error(`Graph API Send Failed: ${JSON.stringify(errorData)}`);
     }
 
-    console.log('[M2] Email dispatched successfully via MS Graph!');
+    throw new Error(`[M2] ${lastError}`);
 };
 
 module.exports = {

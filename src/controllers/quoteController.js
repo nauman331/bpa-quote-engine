@@ -3,6 +3,7 @@ const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingSer
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
+const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog } = require('../services/supabaseService');
 
 const handleGenerateAndSend = async (req, res) => {
     try {
@@ -38,6 +39,24 @@ const handleGenerateAndSend = async (req, res) => {
             pdfFileName,
             pdfBuffer
         );
+
+        // 7. Persist to Supabase + schedule follow-ups
+        try {
+            const quote = await insertQuote({ leadId: null, canonicalTitle, pdfFileName });
+            const send  = await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail });
+            await scheduleFollowUps({
+                sendId:       send.id,
+                recipientEmail: payload.recipientEmail,
+                canonicalTitle,
+                brand:        payload.brand,
+                clientName:   payload.clientName,
+                projectName:  payload.projectName,
+            });
+            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail });
+        } catch (dbErr) {
+            // DB failure must NEVER block the email send — log and continue
+            console.error('[DB] Supabase write failed (non-blocking):', dbErr.message);
+        }
 
         return res.status(200).json({
             status: 'success',
