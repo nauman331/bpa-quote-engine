@@ -1,8 +1,8 @@
 const { processLegacyWebhook } = require('../services/hubspotService');
 const { validateQuoteData } = require('../models/quoteModel');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
-const { downloadTemplate, uploadPdfToArchive } = require('../services/archiveService');
-const { generateQuotePdf } = require('../services/documentService');
+const { uploadPdfToArchive } = require('../services/archiveService');
+const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { sendQuoteEmail } = require('../services/mailService');
 
 const handleHubspotWebhook = async (req, res) => {
@@ -26,8 +26,8 @@ const handleHubspotWebhook = async (req, res) => {
             payload.projectName
         );
         const pdfFileName = buildPdfFileName(canonicalTitle);
-        const templateBuffer = await downloadTemplate(payload.brand, payload.productFamily, payload.tier);
-        const pdfBuffer = await generateQuotePdf(templateBuffer, payload);
+        
+        const pdfBuffer = await getCachedOrGeneratePdf(payload.brand, payload.productFamily, payload.tier);
 
         await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
         await sendQuoteEmail(

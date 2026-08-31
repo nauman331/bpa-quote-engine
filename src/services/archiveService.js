@@ -19,30 +19,50 @@ const getFolderPaths = (brand, productFamily, tier) => {
     if (tier === 'ED') folderTier = 'LEVEL E CONDITIONS D';
     if (tier === 'FD') folderTier = 'LEVEL F CONDITIONS D';
 
-    // 3. Set the exact template filename we just found
-    // Note: If you expand to GCPA or other tiers, you will need to add a conditional here for their specific filenames
-    const fileName = 'BPA Price List - Level D Conditions D - ORIGINAL 10Mar26.docx';
-
-    const templatePath = `${folderProduct}/${folderTier}/${fileName}`;
+    // Template folder path
+    // For Spider and Satellite, the template is just in the root of the product folder?
+    let templateFolderPath = folderProduct;
+    if (folderProduct === 'Mobile Pumps') {
+        templateFolderPath += `/${folderTier}`;
+    }
 
     // 4. Map the exact Archive folder based on the Brand
     const archiveFolderName = isBPA ? 'Price Lists sent Mobile Pumps' : 'GCPA Price Lists Sent Mobile Pumps';
     const archivePath = `${folderProduct}/${archiveFolderName}`;
 
-    return { driveId, templatePath, archivePath };
+    return { driveId, templateFolderPath, archivePath };
 };
+
 const downloadTemplate = async (brand, productFamily, tier) => {
     const token = await getGraphToken();
-    const { driveId: siteId, templatePath } = getFolderPaths(brand, productFamily, tier);
+    const { driveId: siteId, templateFolderPath } = getFolderPaths(brand, productFamily, tier);
 
-    // 3. INJECT THE DEBUG LOG HERE
-    console.log('[DEBUG GRAPH FETCH PATH]: Attempting to fetch ->', templatePath);
+    console.log('[DEBUG GRAPH FETCH PATH]: Attempting to fetch folder ->', templateFolderPath);
 
-    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${templatePath}:/content`, {
+    // URL-encode path
+    const encodedFolderPath = templateFolderPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+
+    // 1. List children of the folder to find the template file
+    const listRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedFolderPath}:/children`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (!res.ok) throw new Error(`Failed to download template: ${res.statusText}`);
+    if (!listRes.ok) throw new Error(`Failed to list template folder: ${await listRes.text()}`);
+    const listData = await listRes.json();
+
+    const templateFile = listData.value.find(file => file.name.endsWith('.docx') || file.name.endsWith('.doc'));
+    if (!templateFile) {
+        throw new Error(`No .docx or .doc template found in ${templateFolderPath}`);
+    }
+
+    console.log(`[M1] Resolved dynamic template file: ${templateFile.name}`);
+
+    // 2. Download the exact template file content
+    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${templateFile.id}/content`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) throw new Error(`Failed to download template file: ${res.statusText}`);
     return Buffer.from(await res.arrayBuffer());
 };
 

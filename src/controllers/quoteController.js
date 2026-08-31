@@ -1,7 +1,7 @@
 const { validateQuoteData } = require('../models/quoteModel');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
-const { generateQuotePdf } = require('../services/documentService');
-const { uploadPdfToArchive, downloadTemplate } = require('../services/archiveService');
+const { getCachedOrGeneratePdf } = require('../services/documentService');
+const { uploadPdfToArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
 
 const handleGenerateAndSend = async (req, res) => {
@@ -24,13 +24,10 @@ const handleGenerateAndSend = async (req, res) => {
 
         console.log(`[M0] Ingested live lead for: ${canonicalTitle}`);
 
-        // 3. Retrieve Master Template from SharePoint (M1)
-        const templateBuffer = await downloadTemplate(payload.brand, payload.productFamily, payload.tier);
+        // 3. Retrieve or Generate PDF via Cache (M1)
+        const pdfBuffer = await getCachedOrGeneratePdf(payload.brand, payload.productFamily, payload.tier);
 
-        // 4. Generate Live PDF via Graph (M1)
-        const pdfBuffer = await generateQuotePdf(templateBuffer, payload);
-
-        // 5. Archive to SharePoint/OneDrive (M1)
+        // 4. Archive to SharePoint/OneDrive (M1)
         await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
 
         // 6. Dispatch Email via Graph (M2)
