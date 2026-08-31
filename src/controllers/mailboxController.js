@@ -15,7 +15,7 @@
  */
 const { fetchMessage } = require('../services/mailboxService');
 const { parseInboundEmail } = require('../services/parseService');
-const { classifyUrgency } = require('../services/classifyService');
+const { analyzeLeadEmail } = require('../services/classifyService');
 const { insertLead, insertQuote, insertSend, scheduleFollowUps, writeAuditLog } = require('../services/supabaseService');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
 const { getCachedOrGeneratePdf } = require('../services/documentService');
@@ -95,20 +95,30 @@ const handleMailboxNotification = async (req, res) => {
                 continue;
             }
 
-            // Parse source + structured fields
+            // Parse source + structured fields (Regex best-effort)
             const parsed = parseInboundEmail(message);
-            console.log(`[Mailbox] Lead parsed: source=${parsed.source}, builder=${parsed.builderName}, project=${parsed.projectName}`);
 
-            // Classify urgency via Claude Haiku
-            const { urgency, reason } = await classifyUrgency(parsed.subject, parsed.rawBody);
-            console.log(`[Mailbox] Urgency: ${urgency.toUpperCase()} — ${reason}`);
+            // AI Validation & Extraction via Claude Haiku
+            const aiAnalysis = await analyzeLeadEmail(parsed.subject, parsed.rawBody);
+            console.log(`[Mailbox] AI Analysis: isLead=${aiAnalysis.isLead} | urgency=${aiAnalysis.urgency.toUpperCase()} | reason=${aiAnalysis.reason}`);
+
+            if (!aiAnalysis.isLead) {
+                console.log(`[Mailbox] AI determined this is NOT a lead. Skipping.`);
+                continue;
+            }
+
+            // Merge AI extraction with Regex extraction (AI wins if it found something, especially for DirectBuilders)
+            const finalBuilderName = aiAnalysis.builderName || parsed.builderName;
+            const finalProjectName = aiAnalysis.projectName || parsed.projectName;
+
+            console.log(`[Mailbox] Final Lead: source=${parsed.source}, builder=${finalBuilderName}, project=${finalProjectName}`);
 
             // Persist lead to Supabase
             const lead = await insertLead({
                 source: parsed.source,
-                payload: parsed,
-                urgency,
-                urgencyReason: reason,
+                payload: { ...parsed, builderName: finalBuilderName, projectName: finalProjectName },
+                urgency: aiAnalysis.urgency,
+                urgencyReason: aiAnalysis.reason,
             });
 
             // Determine brand from which mailbox (BPA for now — GCPA will need separate subscription)
@@ -123,7 +133,7 @@ const handleMailboxNotification = async (req, res) => {
             }
 
             // Build canonical title + filename
-            const canonicalTitle = buildCanonicalTitle(brand, tier, parsed.builderName, parsed.projectName);
+            const canonicalTitle = buildCanonicalTitle(brand, tier, finalBuilderName, finalProjectName);
             const pdfFileName = buildPdfFileName(canonicalTitle);
             console.log(`[M0] Ingested: ${canonicalTitle}`);
 
@@ -144,12 +154,12 @@ const handleMailboxNotification = async (req, res) => {
                 recipientEmail,
                 canonicalTitle,
                 brand,
-                clientName: parsed.builderName,
-                projectName: parsed.projectName,
+                clientName: finalBuilderName,
+                projectName: finalProjectName,
             });
-            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency });
+            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency });
 
-            console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${urgency.toUpperCase()}]`);
+            console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${aiAnalysis.urgency.toUpperCase()}]`);
 
         } catch (err) {
             console.error('[Mailbox] Pipeline error:', err.message);

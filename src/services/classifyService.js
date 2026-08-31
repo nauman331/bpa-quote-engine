@@ -1,6 +1,9 @@
 /**
  * src/services/classifyService.js
- * Calls Claude Haiku to classify inbound lead urgency as hot / warm / cold.
+ * Calls Claude Haiku to:
+ * 1. Validate if an email is a genuine lead (isLead)
+ * 2. Extract Builder and Project name smartly from unstructured text
+ * 3. Classify urgency as hot / warm / cold
  */
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -11,48 +14,63 @@ const getClient = () => {
 };
 
 const SYSTEM_PROMPT = `You are an expert sales classifier for a concrete pumping company (Brisbane Pump Action / GC Pump Action).
-Your job is to read an inbound lead email and classify it as:
-- "hot"  — immediate need, tight tender deadline, or repeat/known builder
-- "warm" — clear project but no urgency signal, or tender more than 2 weeks away
-- "cold" — vague inquiry, no project details, or general information request
+Your job is to read an inbound email and do three things:
+
+1. Validate: Is this actually a request for a quote, concrete pumping rates, or a tender alert? If it is a generic email, spam, invoice, or general inquiry not related to a project quote, set "isLead" to false.
+2. Extract: Find the name of the Builder (company requesting the quote) and the Project Name. If missing, return null.
+3. Classify: If it is a lead, classify urgency as:
+   - "hot"  — immediate need, tight tender deadline, or repeat/known builder
+   - "warm" — clear project but no urgency signal, or tender more than 2 weeks away
+   - "cold" — vague inquiry, no project details, or general information request
 
 Respond ONLY with valid JSON in this exact format:
-{"urgency": "hot"|"warm"|"cold", "reason": "<one sentence explanation>"}`;
+{
+  "isLead": true|false,
+  "builderName": "<extracted builder name or null>",
+  "projectName": "<extracted project name or null>",
+  "urgency": "hot"|"warm"|"cold",
+  "reason": "<one sentence explanation>"
+}`;
 
 /**
- * Classifies an email body + subject as hot/warm/cold via Claude Haiku.
+ * Analyzes an email body + subject via Claude Haiku.
  * @param {string} subject - Email subject line
  * @param {string} body    - Plain-text email body
- * @returns {{ urgency: string, reason: string }}
  */
-const classifyUrgency = async (subject, body) => {
-    // Gracefully degrade if no API key is set
+const analyzeLeadEmail = async (subject, body) => {
     if (!process.env.ANTHROPIC_API_KEY) {
-        console.warn('[Classify] No ANTHROPIC_API_KEY set — defaulting urgency to warm.');
-        return { urgency: 'warm', reason: 'No API key configured; defaulted to warm.' };
+        console.warn('[Classify] No ANTHROPIC_API_KEY set — skipping AI validation.');
+        return { 
+            isLead: true, // Assume true if no AI
+            builderName: null, 
+            projectName: null, 
+            urgency: 'warm', 
+            reason: 'No API key configured; defaulted to warm.' 
+        };
     }
 
     try {
         const response = await getClient().messages.create({
             model: 'claude-haiku-20240307',
-            max_tokens: 128,
+            max_tokens: 256,
             system: SYSTEM_PROMPT,
             messages: [
                 {
                     role: 'user',
-                    content: `Subject: ${subject}\n\n${body.substring(0, 2000)}` // cap at 2000 chars
+                    content: `Subject: ${subject}\n\n${body.substring(0, 2000)}`
                 }
             ]
         });
 
         const raw = response.content[0].text.trim();
         const parsed = JSON.parse(raw);
-        console.log(`[Classify] urgency=${parsed.urgency} — ${parsed.reason}`);
+        console.log(`[Classify] isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
         return parsed;
     } catch (err) {
-        console.warn('[Classify] Claude call failed:', err.message, '— defaulting to warm.');
-        return { urgency: 'warm', reason: 'Classification failed; defaulted to warm.' };
+        console.warn('[Classify] Claude call failed:', err.message);
+        return { isLead: true, builderName: null, projectName: null, urgency: 'warm', reason: 'Classification failed.' };
     }
 };
 
-module.exports = { classifyUrgency };
+module.exports = { analyzeLeadEmail };
+
