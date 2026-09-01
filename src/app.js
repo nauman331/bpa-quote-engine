@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const { PORT } = require('./config/env');
 const quoteRoutes = require('./routes/quoteRoutes');
 const mailboxRoutes = require('./routes/mailboxRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const { createOrRenewSubscription } = require('./services/mailboxService');
 const { runFollowUpCron } = require('./services/followUpService');
 
@@ -12,6 +13,7 @@ const startApp = () => {
 
     app.use('/api/quotes', quoteRoutes);
     app.use('/api/webhook', mailboxRoutes);
+    app.use('/api/dashboard', dashboardRoutes);
     app.get('/', (req, res) => res.status(200).send('BPA Quote Engine API is running.'));
 
     app.listen(PORT, async () => {

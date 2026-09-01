@@ -121,6 +121,53 @@ const markFollowUpSent = async (id) => {
     await db.from('follow_ups').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
 };
 
+/**
+ * Fetches recent leads for the dashboard.
+ */
+const getRecentLeads = async (limit = 50) => {
+    const db = getClient();
+    const { data, error } = await db.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data;
+};
+
+/**
+ * Fetches recent quotes for the dashboard (with lead details if joined).
+ */
+const getRecentQuotes = async (limit = 50) => {
+    const db = getClient();
+    const { data, error } = await db.from('quotes').select('*, leads(*)').order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data;
+};
+
+/**
+ * Fetches upcoming pending follow-ups.
+ */
+const getPendingFollowUps = async (limit = 50) => {
+    const db = getClient();
+    const { data, error } = await db.from('follow_ups').select('*').eq('status', 'pending').order('send_at', { ascending: true }).limit(limit);
+    if (error) throw error;
+    return data;
+};
+
+/**
+ * Fetches top-level dashboard stats.
+ */
+const getDashboardStats = async () => {
+    const db = getClient();
+    const [leadsReq, quotesReq, pendingReq] = await Promise.all([
+        db.from('leads').select('*', { count: 'exact', head: true }),
+        db.from('quotes').select('*', { count: 'exact', head: true }),
+        db.from('follow_ups').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+    ]);
+    return {
+        totalLeads: leadsReq.count || 0,
+        totalQuotesSent: quotesReq.count || 0,
+        pendingFollowUps: pendingReq.count || 0,
+    };
+};
+
 module.exports = {
     insertLead,
     insertQuote,
@@ -129,4 +176,9 @@ module.exports = {
     writeAuditLog,
     getDueFollowUps,
     markFollowUpSent,
+    getRecentLeads,
+    getRecentQuotes,
+    getPendingFollowUps,
+    getDashboardStats,
 };
+
