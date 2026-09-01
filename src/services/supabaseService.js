@@ -180,5 +180,6 @@ module.exports = {
     getRecentQuotes,
     getPendingFollowUps,
     getDashboardStats,
+    getClient,
 };
 

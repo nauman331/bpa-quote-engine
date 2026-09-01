@@ -21,7 +21,7 @@ const getDashboardData = async (req, res) => {
             followUps
         });
     } catch (err) {
-        console.error('[Dashboard API Error]:', err.message);
+        console.error('[Dashboard API Error]:', err);
         res.status(500).json({ error: 'Failed to fetch dashboard data' });
     }
 };

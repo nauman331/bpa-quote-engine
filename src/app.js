@@ -1,19 +1,25 @@
 const express = require('express');
+const cors = require('cors');
 const cron = require('node-cron');
 const { PORT } = require('./config/env');
 const quoteRoutes = require('./routes/quoteRoutes');
 const mailboxRoutes = require('./routes/mailboxRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const profileRoutes = require('./routes/profileRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 const { createOrRenewSubscription } = require('./services/mailboxService');
 const { runFollowUpCron } = require('./services/followUpService');
 
 const startApp = () => {
     const app = express();
     app.use(express.json());
+    app.use(cors());
 
     app.use('/api/quotes', quoteRoutes);
     app.use('/api/webhook', mailboxRoutes);
     app.use('/api/dashboard', dashboardRoutes);
+    app.use('/api/profile', profileRoutes);
+    app.use('/api/settings', settingsRoutes);
     app.get('/', (req, res) => res.status(200).send('BPA Quote Engine API is running.'));
 
     app.listen(PORT, async () => {
