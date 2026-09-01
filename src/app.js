@@ -42,7 +42,7 @@ const startApp = () => {
         cron.schedule('0 16 * * *', async () => {
             console.log('[Cron] Renewing mailbox subscription...');
             if (publicUrl) {
-                try { await createOrRenewSubscription(`${publicUrl}/api/webhook/mailbox`); } 
+                try { await createOrRenewSubscription(`${publicUrl}/api/webhook/mailbox`); }
                 catch (e) { console.error('[Cron] Renewal error:', e.message); }
             }
         });
