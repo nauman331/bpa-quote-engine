@@ -10,11 +10,12 @@ const Anthropic = require('@anthropic-ai/sdk');
 let client;
 const getClient = () => {
     if (!client) {
-        const options = { apiKey: process.env.ANTHROPIC_API_KEY };
-        if (process.env.ANTHROPIC_WORKSPACE_ID) {
-            options.defaultHeaders = { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID };
-        }
-        client = new Anthropic(options);
+        client = new Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY,
+            defaultHeaders: process.env.ANTHROPIC_WORKSPACE_ID ? {
+                'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID
+            } : undefined
+        });
     }
     return client;
 };
