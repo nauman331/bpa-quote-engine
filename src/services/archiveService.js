@@ -94,4 +94,30 @@ const uploadPdfToArchive = async (brand, productFamily, rawFileName, pdfBuffer) 
     console.log(`[M1] Successfully archived ${safeFileName} to ${archivePath}`);
 };
 
-module.exports = { downloadTemplate, uploadPdfToArchive };
+const downloadPdfFromArchive = async (fileName) => {
+    const token = await getGraphToken();
+    
+    // Guess brand and product from filename
+    const brand = fileName.toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
+    let productFamily = 'Mobile Pumps';
+    if (fileName.toLowerCase().includes('spider')) productFamily = 'Spider';
+    if (fileName.toLowerCase().includes('satellite')) productFamily = 'Satellite';
+
+    const { driveId: siteId, archivePath } = getFolderPaths(brand, productFamily, null);
+    
+    const safeFileName = fileName.replace(/[/#?%\\]/g, '-');
+    const fullPath = `${archivePath}/${safeFileName}`;
+    const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+
+    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/content`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to download PDF from archive: ${res.statusText}`);
+    }
+    
+    return Buffer.from(await res.arrayBuffer());
+};
+
+module.exports = { downloadTemplate, uploadPdfToArchive, downloadPdfFromArchive };

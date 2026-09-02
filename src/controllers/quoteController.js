@@ -70,4 +70,24 @@ const handleGenerateAndSend = async (req, res) => {
     }
 };
 
-module.exports = { handleGenerateAndSend };
+const handleDownloadQuote = async (req, res) => {
+    try {
+        const { file } = req.query;
+        if (!file) return res.status(400).json({ error: 'file query parameter is required' });
+        
+        const { downloadPdfFromArchive } = require('../services/archiveService');
+        const pdfBuffer = await downloadPdfFromArchive(file);
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${file}"`);
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('[Download Quote Error]', error.message);
+        res.status(500).json({ error: 'Failed to download quote document' });
+    }
+};
+
+module.exports = {
+    handleGenerateAndSend,
+    handleDownloadQuote
+};
