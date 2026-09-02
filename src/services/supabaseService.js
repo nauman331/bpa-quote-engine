@@ -73,6 +73,7 @@ const scheduleFollowUps = async ({ sendId, recipientEmail, canonicalTitle, brand
         { touch: 1, send_at: new Date(now.getTime() + 7  * 24 * 60 * 60 * 1000), type: 'email' },
         { touch: 2, send_at: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), type: 'email' },
         { touch: 3, send_at: new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000), type: 'call_prompt' },
+        { touch: 4, send_at: new Date(now.getTime() + 51 * 24 * 60 * 60 * 1000), type: 're_engage_prompt' },
     ].map(f => ({
         send_id:        sendId,
         recipient_email: recipientEmail,
@@ -168,6 +169,32 @@ const getDashboardStats = async () => {
     };
 };
 
+/**
+ * Verifies if a deal successfully synced from HubSpot into the crm_records mirror.
+ */
+const verifyDealInMirror = async (canonicalTitle) => {
+    const db = getClient();
+    const { data, error } = await db
+        .from('crm_records')
+        .select('*')
+        // Using ilike or checking if the title exists
+        .ilike('deal_name', `%${canonicalTitle}%`)
+        .limit(1);
+    
+    if (error) {
+        console.error(`[Mirror Check] DB error checking mirror for ${canonicalTitle}:`, error.message);
+        return false;
+    }
+    
+    if (data && data.length > 0) {
+        console.log(`[Mirror Check] SUCCESS: Deal for ${canonicalTitle} found in mirror.`);
+        return true;
+    }
+    
+    console.warn(`[Mirror Check] WARNING: Deal for ${canonicalTitle} NOT found in mirror after sync window.`);
+    return false;
+};
+
 module.exports = {
     insertLead,
     insertQuote,
@@ -180,6 +207,7 @@ module.exports = {
     getRecentQuotes,
     getPendingFollowUps,
     getDashboardStats,
+    verifyDealInMirror,
     getClient,
 };
 

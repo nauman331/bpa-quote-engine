@@ -3,7 +3,8 @@ const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingSer
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
-const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog } = require('../services/supabaseService');
+const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog, verifyDealInMirror } = require('../services/supabaseService');
+const { appendExcelLog } = require('../services/excelService');
 
 const handleGenerateAndSend = async (req, res) => {
     try {
@@ -40,7 +41,7 @@ const handleGenerateAndSend = async (req, res) => {
             pdfBuffer
         );
 
-        // 7. Persist to Supabase + schedule follow-ups
+        // 7. Persist to Supabase + Excel + schedule follow-ups
         try {
             const quote = await insertQuote({ leadId: null, canonicalTitle, pdfFileName });
             const send  = await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail });
@@ -53,9 +54,18 @@ const handleGenerateAndSend = async (req, res) => {
                 projectName:  payload.projectName,
             });
             await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail });
+            
+            // Generate SPN and append to Excel Log
+            await appendExcelLog(canonicalTitle, payload.clientName, payload.projectName, payload.recipientEmail);
+            
+            // 8. Verify deal appeared in mirror (Async polling)
+            setTimeout(() => {
+                verifyDealInMirror(canonicalTitle).catch(console.error);
+            }, 60000); // Check after 60 seconds to allow HubSpot processing
+            
         } catch (dbErr) {
             // DB failure must NEVER block the email send — log and continue
-            console.error('[DB] Supabase write failed (non-blocking):', dbErr.message);
+            console.error('[DB] Persistence/Excel write failed (non-blocking):', dbErr.message);
         }
 
         return res.status(200).json({

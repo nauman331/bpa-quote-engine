@@ -97,6 +97,13 @@ const runFollowUpCron = async () => {
                 continue;
             }
 
+            if (followUp.type === 're_engage_prompt') {
+                // Touch 4 (Outcome) — 30-day re-engage. Log it as 'No contact' final outcome.
+                console.log(`[FollowUp] ⚠️  RE-ENGAGE (NO CONTACT) due for ${followUp.client_name} re: ${followUp.project_name}. Total 51 days passed.`);
+                await markFollowUpSent(followUp.id);
+                continue;
+            }
+
             const html = followUp.touch_number === 1
                 ? buildTouch1Html({ clientName: followUp.client_name, projectName: followUp.project_name })
                 : buildTouch2Html({ clientName: followUp.client_name, projectName: followUp.project_name });
