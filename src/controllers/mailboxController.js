@@ -100,10 +100,11 @@ const handleMailboxNotification = async (req, res) => {
 
             // AI Validation & Extraction via Claude Haiku
             const aiAnalysis = await analyzeLeadEmail(parsed.subject, parsed.rawBody);
-            console.log(`[Mailbox] AI Analysis: isLead=${aiAnalysis.isLead} | urgency=${aiAnalysis.urgency.toUpperCase()} | reason=${aiAnalysis.reason}`);
+            const urgencyDisplay = (aiAnalysis.urgency || 'N/A').toUpperCase();
+            console.log(`[Mailbox] AI Analysis: isLead=${aiAnalysis.isLead} | urgency=${urgencyDisplay} | reason=${aiAnalysis.reason}`);
 
             if (!aiAnalysis.isLead) {
-                console.log(`[Mailbox] AI determined this is NOT a lead. Skipping.`);
+                console.log(`[Mailbox] ⛔ AI determined this is NOT a lead (invoice/spam/general). Pipeline stopped.`);
                 continue;
             }
 
@@ -159,7 +160,7 @@ const handleMailboxNotification = async (req, res) => {
             });
             await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency });
 
-            console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${aiAnalysis.urgency.toUpperCase()}]`);
+            console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${(aiAnalysis.urgency || 'N/A').toUpperCase()}]`);
 
         } catch (err) {
             console.error('[Mailbox] Pipeline error:', err.message);
