@@ -68,4 +68,32 @@ const fetchMessage = async (messageId) => {
     return res.json();
 };
 
-module.exports = { createOrRenewSubscription, fetchMessage };
+/**
+ * Fetches the most recent N messages from the shared mailbox inbox.
+ */
+const fetchRecentMessages = async (limit = 50, fromEmail = null, keyword = null) => {
+    const token = await getGraphToken();
+    const headers = { 'Authorization': `Bearer ${token}` };
+
+    let url = `https://graph.microsoft.com/v1.0/users/${SHARED_MAILBOX}/mailFolders/Inbox/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,isRead,body`;
+
+    if (fromEmail) {
+        // $filter requires ConsistencyLevel: eventual + $count=true — can't combine with $orderby
+        url += `&$filter=from/emailAddress/address eq '${fromEmail}'&$count=true`;
+        headers['ConsistencyLevel'] = 'eventual';
+    } else if (keyword) {
+        // $search searches subject + body — also requires ConsistencyLevel
+        url += `&$search="${keyword}"`;
+        headers['ConsistencyLevel'] = 'eventual';
+    } else {
+        url += `&$orderby=receivedDateTime desc`;
+    }
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Failed to fetch recent messages: ${res.statusText}`);
+    const data = await res.json();
+    return data.value || [];
+};
+
+module.exports = { createOrRenewSubscription, fetchMessage, fetchRecentMessages };
+
