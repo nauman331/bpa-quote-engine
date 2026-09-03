@@ -149,7 +149,7 @@ const handleMailboxNotification = async (req, res) => {
 
             // Persist quote + send + schedule follow-ups
             const quote = await insertQuote({ leadId: lead.id, canonicalTitle, pdfFileName });
-            const send  = await insertSend({ quoteId: quote.id, recipientEmail });
+            const send = await insertSend({ quoteId: quote.id, recipientEmail });
             await scheduleFollowUps({
                 sendId: send.id,
                 recipientEmail,
