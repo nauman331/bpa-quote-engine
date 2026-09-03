@@ -58,16 +58,20 @@ const extractFields = (source, subject = '', bodyText = '') => {
         projectLocation = locationLine?.[1]?.trim();
 
     } else {
-        // Direct Builder: best-effort from subject + first line of body
-        projectName = subject.replace(/^(re|fwd|fw):\s*/i, '').trim();
+        // Direct Builder: try to extract project from body keywords
+        const projectLine = bodyText.match(/(?:project|site|job|address|located at|at)\s*[:–]?\s*([A-Z0-9][^.\n]{5,60})/i);
+        projectName = projectLine?.[1]?.trim() || null; // Claude will override this if it finds something
         // Try to get the sender's company from the email signature
-        const companyLine = bodyText.match(/(?:company|from|regards)[,:\s]+(.+)/i);
-        builderName = companyLine?.[1]?.trim() || 'Unknown Builder';
+        const companyLine = bodyText.match(/(?:regards|from|company)[,:\n\s]+([A-Z][^\n]{2,50}(?:Pty|Ltd|Co|Group|Constructions|Builders|Group)?)/i);
+        builderName = companyLine?.[1]?.trim() || null;
     }
 
     return {
         builderName:     builderName     || 'Unknown Builder',
-        projectName:     projectName     || subject || 'Unknown Project',
+        // IMPORTANT: Never use raw inbound subject as project name.
+        // Claude will override this with the real project name if found.
+        // If nothing is found, 'New Enquiry' keeps our outbound subject line clean.
+        projectName:     projectName     || 'New Enquiry',
         projectLocation: projectLocation || null,
     };
 };
