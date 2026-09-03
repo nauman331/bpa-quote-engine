@@ -12,9 +12,6 @@ const getClient = () => {
     if (!client) {
         client = new Anthropic({
             apiKey: process.env.ANTHROPIC_API_KEY,
-            defaultHeaders: process.env.ANTHROPIC_WORKSPACE_ID ? {
-                'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID
-            } : undefined
         });
     }
     return client;
@@ -47,18 +44,18 @@ Respond ONLY with valid JSON in this exact format:
 const analyzeLeadEmail = async (subject, body) => {
     if (!process.env.ANTHROPIC_API_KEY) {
         console.warn('[Classify] No ANTHROPIC_API_KEY set — skipping AI validation.');
-        return { 
+        return {
             isLead: true, // Assume true if no AI
-            builderName: null, 
-            projectName: null, 
-            urgency: 'warm', 
-            reason: 'No API key configured; defaulted to warm.' 
+            builderName: null,
+            projectName: null,
+            urgency: 'warm',
+            reason: 'No API key configured; defaulted to warm.'
         };
     }
 
     try {
         const response = await getClient().messages.create({
-            model: 'claude-haiku-20240307',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 256,
             system: SYSTEM_PROMPT,
             messages: [
@@ -69,7 +66,11 @@ const analyzeLeadEmail = async (subject, body) => {
             ]
         });
 
-        const raw = response.content[0].text.trim();
+        const raw = response.content[0].text.trim()
+            .replace(/^```json\s*/i, '')  // strip opening ```json
+            .replace(/^```\s*/i, '')      // strip opening ``` (no lang)
+            .replace(/\s*```$/, '')       // strip closing ```
+            .trim();
         const parsed = JSON.parse(raw);
         console.log(`[Classify] isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
         return parsed;
