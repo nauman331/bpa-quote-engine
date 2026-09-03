@@ -124,7 +124,7 @@ const handleMailboxNotification = async (req, res) => {
 
             // Determine brand from which mailbox (BPA for now — GCPA will need separate subscription)
             const brand = 'BPA';
-            const productFamily = 'Mobile Rates';
+            const productFamily = aiAnalysis.productFamily || 'Mobile Rates';
             const tier = 'DD';
             const recipientEmail = parsed.senderEmail;
 

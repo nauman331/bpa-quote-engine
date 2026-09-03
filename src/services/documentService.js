@@ -12,43 +12,60 @@ const pdfCache = new Map();
 /**
  * Parses the docx XML and replaces any hardcoded dates (e.g. "10 Mar. 26") with today's date.
  */
-const injectTodaysDate = (templateBuffer) => {
-    const zip = new PizZip(templateBuffer);
-    
-    // Format date to match "d MMM. yy" (e.g., "31 Aug. 26")
-    const formattedDate = new Intl.DateTimeFormat('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: '2-digit'
-    }).format(new Date()).replace(/([a-zA-Z]+)/, '$1.');
+const injectTodaysDate = (templateBuffer, fileName) => {
+    // Only parse if it's a docx
+    if (!fileName.toLowerCase().endsWith('.docx')) {
+        console.log(`[M1] Skipping date injection for non-docx file: ${fileName}`);
+        return templateBuffer;
+    }
 
-    // Regex to match dates like "10 Mar. 26" or "1 Aug. 26" inside the XML text nodes
-    const dateRegex = /\b\d{1,2}\s[A-Za-z]{3}\.\s\d{2}\b/g;
+    try {
+        const zip = new PizZip(templateBuffer);
+        
+        // Format date to match "d MMM. yy" (e.g., "31 Aug. 26")
+        const formattedDate = new Intl.DateTimeFormat('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        }).format(new Date()).replace(/([a-zA-Z]+)/, '$1.');
 
-    Object.keys(zip.files).forEach(fileName => {
-        if (fileName.endsWith('.xml')) {
-            let content = zip.files[fileName].asText();
-            if (dateRegex.test(content)) {
-                content = content.replace(dateRegex, formattedDate);
-                zip.file(fileName, content);
-                console.log(`[M1] Injected today's date (${formattedDate}) into ${fileName}`);
+        // Regex to match dates like "10 Mar. 26" or "1 Aug. 26" inside the XML text nodes
+        const dateRegex = /\b\d{1,2}\s[A-Za-z]{3}\.\s\d{2}\b/g;
+
+        Object.keys(zip.files).forEach(xmlName => {
+            if (xmlName.endsWith('.xml')) {
+                let content = zip.files[xmlName].asText();
+                if (dateRegex.test(content)) {
+                    content = content.replace(dateRegex, formattedDate);
+                    zip.file(xmlName, content);
+                    console.log(`[M1] Injected today's date (${formattedDate}) into ${xmlName}`);
+                }
             }
-        }
-    });
+        });
 
-    return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+        return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+    } catch (err) {
+        console.error(`[M1] Error parsing zip for date injection on ${fileName}:`, err.message);
+        return templateBuffer; // Fallback to raw buffer
+    }
 };
 
-const convertToPdfViaGraph = async (docxBuffer) => {
+const convertToPdfViaGraph = async (docBuffer, originalFileName) => {
     const token = await getGraphToken();
     const siteId = process.env.BPA_DRIVE_ID;
 
-    // 1. Upload temporary docx to Graph 
-    const tempFileName = `temp_${Date.now()}.docx`;
+    // Use the original extension (either .doc or .docx)
+    const ext = originalFileName.toLowerCase().endsWith('.docx') ? '.docx' : '.doc';
+    const tempFileName = `temp_${Date.now()}${ext}`;
+    const contentType = ext === '.docx' 
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/msword';
+
+    // 1. Upload temporary doc to Graph 
     const uploadRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Temp/${tempFileName}:/content`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-        body: docxBuffer
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': contentType },
+        body: docBuffer
     });
 
     if (!uploadRes.ok) throw new Error(`Temp upload failed: ${await uploadRes.text()}`);
@@ -58,9 +75,15 @@ const convertToPdfViaGraph = async (docxBuffer) => {
     const pdfRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${uploadData.id}/content?format=pdf`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
+    
+    if (!pdfRes.ok) {
+        const errText = await pdfRes.text();
+        throw new Error(`Graph PDF conversion failed: ${pdfRes.status} ${pdfRes.statusText} - ${errText}`);
+    }
+    
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
 
-    // 3. Clean up temporary docx 
+    // 3. Clean up temporary doc 
     await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${uploadData.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -83,9 +106,9 @@ const getCachedOrGeneratePdf = async (brand, productFamily, tier) => {
     }
 
     console.log(`[M1] Cache MISS for: ${cacheKey}. Generating new PDF...`);
-    const rawTemplateBuffer = await downloadTemplate(brand, productFamily, tier);
-    const processedDocx = injectTodaysDate(rawTemplateBuffer);
-    const pdfBuffer = await convertToPdfViaGraph(processedDocx);
+    const { buffer: rawTemplateBuffer, fileName } = await downloadTemplate(brand, productFamily, tier);
+    const processedDoc = injectTodaysDate(rawTemplateBuffer, fileName);
+    const pdfBuffer = await convertToPdfViaGraph(processedDoc, fileName);
     
     // Store in cache for subsequent sends today
     pdfCache.set(cacheKey, pdfBuffer);

@@ -63,7 +63,10 @@ const downloadTemplate = async (brand, productFamily, tier) => {
     });
 
     if (!res.ok) throw new Error(`Failed to download template file: ${res.statusText}`);
-    return Buffer.from(await res.arrayBuffer());
+    return { 
+        buffer: Buffer.from(await res.arrayBuffer()), 
+        fileName: templateFile.name 
+    };
 };
 
 const uploadPdfToArchive = async (brand, productFamily, rawFileName, pdfBuffer) => {
