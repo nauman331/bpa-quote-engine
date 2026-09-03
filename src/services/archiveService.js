@@ -26,8 +26,13 @@ const getFolderPaths = (brand, productFamily, tier) => {
         templateFolderPath += `/${folderTier}`;
     }
 
-    // 4. Map the exact Archive folder based on the Brand
-    const archiveFolderName = isBPA ? 'Price Lists sent Mobile Pumps' : 'GCPA Price Lists Sent Mobile Pumps';
+    // 4. Map the exact Archive folder based on the Product and Brand
+    let archiveFolderName = isBPA ? 'Price Lists sent Mobile Pumps' : 'GCPA Price Lists Sent Mobile Pumps';
+    if (folderProduct === 'Spider Boom') {
+        archiveFolderName = 'Spider Boom Prices List sent';
+    } else if (folderProduct === 'Static Line Satellite Rates') {
+        archiveFolderName = 'Price Lists sent - Satellite';
+    }
     const archivePath = `${folderProduct}/${archiveFolderName}`;
 
     return { driveId, templateFolderPath, archivePath };
@@ -50,7 +55,8 @@ const downloadTemplate = async (brand, productFamily, tier) => {
     if (!listRes.ok) throw new Error(`Failed to list template folder: ${await listRes.text()}`);
     const listData = await listRes.json();
 
-    const templateFile = listData.value.find(file => file.name.endsWith('.docx') || file.name.endsWith('.doc'));
+    const validFiles = listData.value.filter(file => !file.folder && (file.name.endsWith('.docx') || file.name.endsWith('.doc')));
+    const templateFile = validFiles.find(file => file.name.endsWith('.docx')) || validFiles.find(file => file.name.endsWith('.doc'));
     if (!templateFile) {
         throw new Error(`No .docx or .doc template found in ${templateFolderPath}`);
     }
@@ -63,9 +69,9 @@ const downloadTemplate = async (brand, productFamily, tier) => {
     });
 
     if (!res.ok) throw new Error(`Failed to download template file: ${res.statusText}`);
-    return { 
-        buffer: Buffer.from(await res.arrayBuffer()), 
-        fileName: templateFile.name 
+    return {
+        buffer: Buffer.from(await res.arrayBuffer()),
+        fileName: templateFile.name
     };
 };
 
@@ -99,7 +105,7 @@ const uploadPdfToArchive = async (brand, productFamily, rawFileName, pdfBuffer) 
 
 const downloadPdfFromArchive = async (fileName) => {
     const token = await getGraphToken();
-    
+
     // Guess brand and product from filename
     const brand = fileName.toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
     let productFamily = 'Mobile Pumps';
@@ -107,7 +113,7 @@ const downloadPdfFromArchive = async (fileName) => {
     if (fileName.toLowerCase().includes('satellite')) productFamily = 'Satellite';
 
     const { driveId: siteId, archivePath } = getFolderPaths(brand, productFamily, null);
-    
+
     const safeFileName = fileName.replace(/[/#?%\\]/g, '-');
     const fullPath = `${archivePath}/${safeFileName}`;
     const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
@@ -119,7 +125,7 @@ const downloadPdfFromArchive = async (fileName) => {
     if (!res.ok) {
         throw new Error(`Failed to download PDF from archive: ${res.statusText}`);
     }
-    
+
     return Buffer.from(await res.arrayBuffer());
 };
 

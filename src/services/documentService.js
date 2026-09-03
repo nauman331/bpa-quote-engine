@@ -13,41 +13,68 @@ const pdfCache = new Map();
  * Parses the docx XML and replaces any hardcoded dates (e.g. "10 Mar. 26") with today's date.
  */
 const injectTodaysDate = (templateBuffer, fileName) => {
-    // Only parse if it's a docx
-    if (!fileName.toLowerCase().endsWith('.docx')) {
-        console.log(`[M1] Skipping date injection for non-docx file: ${fileName}`);
-        return templateBuffer;
-    }
+    // Format date to match "d MMM. yy" (e.g., "31 Aug. 26" or "3 Sept. 26")
+    const formattedDate = new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit'
+    }).format(new Date()).replace(/([a-zA-Z]+)/, '$1.');
 
-    try {
-        const zip = new PizZip(templateBuffer);
-        
-        // Format date to match "d MMM. yy" (e.g., "31 Aug. 26")
-        const formattedDate = new Intl.DateTimeFormat('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            year: '2-digit'
-        }).format(new Date()).replace(/([a-zA-Z]+)/, '$1.');
+    // 1. If DOCX, use PizZip XML replacement
+    if (fileName.toLowerCase().endsWith('.docx')) {
+        try {
+            const zip = new PizZip(templateBuffer);
+            const dateRegex = /\b\d{1,2}\s[A-Za-z]{3}\.\s\d{2}\b/g;
 
-        // Regex to match dates like "10 Mar. 26" or "1 Aug. 26" inside the XML text nodes
-        const dateRegex = /\b\d{1,2}\s[A-Za-z]{3}\.\s\d{2}\b/g;
-
-        Object.keys(zip.files).forEach(xmlName => {
-            if (xmlName.endsWith('.xml')) {
-                let content = zip.files[xmlName].asText();
-                if (dateRegex.test(content)) {
-                    content = content.replace(dateRegex, formattedDate);
-                    zip.file(xmlName, content);
-                    console.log(`[M1] Injected today's date (${formattedDate}) into ${xmlName}`);
+            Object.keys(zip.files).forEach(xmlName => {
+                if (xmlName.endsWith('.xml')) {
+                    let content = zip.files[xmlName].asText();
+                    if (dateRegex.test(content)) {
+                        content = content.replace(dateRegex, formattedDate);
+                        zip.file(xmlName, content);
+                        console.log(`[M1] Injected today's date (${formattedDate}) into ${xmlName}`);
+                    }
                 }
-            }
-        });
+            });
 
-        return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-    } catch (err) {
-        console.error(`[M1] Error parsing zip for date injection on ${fileName}:`, err.message);
-        return templateBuffer; // Fallback to raw buffer
+            return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+        } catch (err) {
+            console.error(`[M1] Error parsing zip for date injection on ${fileName}:`, err.message);
+            return templateBuffer;
+        }
     }
+
+    // 2. If binary DOC, do in-place string replacement preserving exact byte length
+    if (fileName.toLowerCase().endsWith('.doc')) {
+        try {
+            const docStr = templateBuffer.toString('binary');
+            const docDateRegex = /\b\d{1,2}\s+[A-Za-z]{3}\.?\s+\d{2,4}\b/g;
+            let replacedCount = 0;
+
+            const modifiedStr = docStr.replace(docDateRegex, (match) => {
+                // Match exact length of original date string so binary offsets stay intact
+                let replacement = formattedDate;
+                if (replacement.length < match.length) {
+                    replacement = replacement.padEnd(match.length, ' ');
+                } else if (replacement.length > match.length) {
+                    replacement = replacement.substring(0, match.length);
+                }
+                replacedCount++;
+                return replacement;
+            });
+
+            if (replacedCount > 0) {
+                console.log(`[M1] Injected today's date (${formattedDate}) into binary .doc file (${replacedCount} match(es))`);
+                return Buffer.from(modifiedStr, 'binary');
+            }
+            return templateBuffer;
+        } catch (err) {
+            console.error(`[M1] Error injecting date into .doc on ${fileName}:`, err.message);
+            return templateBuffer;
+        }
+    }
+
+    return templateBuffer;
 };
 
 const convertToPdfViaGraph = async (docBuffer, originalFileName) => {
