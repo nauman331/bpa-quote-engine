@@ -48,6 +48,11 @@ const buildQuoteEmailHtml = ({ recipientFirstName, projectName }) => {
  * Dispatches the email via the Microsoft Graph API.
  */
 const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBuffer) => {
+    if (process.env.ENABLE_AUTOMATION !== 'true' || process.env.DISPATCH_EMAILS === 'false' || process.env.DRY_RUN === 'true') {
+        console.log(`[DRY RUN] Outbound quote email skipped: "${subject}" -> ${recipientEmail}`);
+        return;
+    }
+
     console.log(`[M2] Authenticating with Azure for Tenant: ${process.env.AZURE_TENANT_ID}...`);
 
     // 1. Get Azure OAuth Token (Client Credentials Flow)

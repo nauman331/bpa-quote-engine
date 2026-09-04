@@ -63,6 +63,11 @@ const handleMailboxNotification = async (req, res) => {
     // Respond 202 immediately — Graph will retry if we don't respond within 10s
     res.status(202).send();
 
+    if (process.env.ENABLE_AUTOMATION !== 'true') {
+        console.log('[Mailbox] ⏸️  Automation is paused (ENABLE_AUTOMATION!=true). Webhook notification acknowledged without pipeline processing.');
+        return;
+    }
+
     const notifications = req.body?.value || [];
 
     for (const notification of notifications) {

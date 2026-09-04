@@ -25,6 +25,17 @@ const startApp = () => {
     app.listen(PORT, async () => {
         console.log(`BPA Quote Engine running on port ${PORT}`);
 
+        const isAutomationEnabled = process.env.ENABLE_AUTOMATION === 'true';
+
+        if (!isAutomationEnabled) {
+            console.log('[Automation] ⏸️  Background automations (mailbox listener, follow-up cron) are PAUSED.');
+            console.log('[Automation] ℹ️  All API endpoints (Dashboard, Quotes, Profile, Settings) remain fully active.');
+            console.log('[Automation] ℹ️  To activate live email triage and cron dispatch on production, set ENABLE_AUTOMATION=true in .env.');
+            return;
+        }
+
+        console.log('[Automation] ▶️  Background automations ACTIVE (ENABLE_AUTOMATION=true).');
+
         // Register/renew mailbox subscription on startup
         const publicUrl = process.env.PUBLIC_URL;
         if (publicUrl) {

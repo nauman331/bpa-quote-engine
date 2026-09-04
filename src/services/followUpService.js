@@ -79,6 +79,11 @@ const sendFollowUpEmail = async (followUp, htmlBody) => {
  * Main runner — called by cron. Fetches all due follow-ups and dispatches them.
  */
 const runFollowUpCron = async () => {
+    if (process.env.ENABLE_AUTOMATION !== 'true') {
+        console.log('[FollowUp] ⏸️  Automation is paused (ENABLE_AUTOMATION!=true) — skipping follow-up cron.');
+        return;
+    }
+
     const due = await getDueFollowUps();
     if (due.length === 0) {
         console.log('[FollowUp] No due follow-ups.');
