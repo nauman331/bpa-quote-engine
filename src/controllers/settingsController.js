@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const getSettings = (req, res) => {
-    // Return masked versions of the keys
+
     res.json({
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? "••••" + process.env.ANTHROPIC_API_KEY.slice(-4) : null,
         HUBSPOT_ACCESS_TOKEN: process.env.HUBSPOT_ACCESS_TOKEN ? "••••" + process.env.HUBSPOT_ACCESS_TOKEN.slice(-4) : null,
@@ -12,22 +12,19 @@ const getSettings = (req, res) => {
 
 const updateSettings = (req, res) => {
     const { ANTHROPIC_API_KEY, HUBSPOT_ACCESS_TOKEN, AZURE_CLIENT_SECRET } = req.body;
-    
-    // Path to the .env file
+
     const envPath = path.resolve(__dirname, '../../.env');
     let envContent = '';
-    
+
     if (fs.existsSync(envPath)) {
         envContent = fs.readFileSync(envPath, 'utf8');
     }
-    
+
     const updateEnvVar = (key, value) => {
         if (!value) return;
-        
-        // Update in memory so changes take effect immediately
+
         process.env[key] = value;
-        
-        // Update in .env file
+
         const regex = new RegExp(`^${key}=.*$`, 'm');
         if (regex.test(envContent)) {
             envContent = envContent.replace(regex, `${key}="${value}"`);
@@ -35,14 +32,13 @@ const updateSettings = (req, res) => {
             envContent += `\n${key}="${value}"`;
         }
     };
-    
+
     updateEnvVar('ANTHROPIC_API_KEY', ANTHROPIC_API_KEY);
     updateEnvVar('HUBSPOT_ACCESS_TOKEN', HUBSPOT_ACCESS_TOKEN);
     updateEnvVar('AZURE_CLIENT_SECRET', AZURE_CLIENT_SECRET);
-    
-    // Write back to file
+
     fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
-    
+
     res.json({ success: true, message: "Settings updated successfully." });
 };
 

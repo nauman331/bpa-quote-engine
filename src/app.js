@@ -36,7 +36,6 @@ const startApp = () => {
 
         console.log('[Automation] ▶️  Background automations ACTIVE (ENABLE_AUTOMATION=true).');
 
-        // Register/renew mailbox subscription on startup
         const publicUrl = process.env.PUBLIC_URL;
         if (publicUrl) {
             try {
@@ -48,14 +47,11 @@ const startApp = () => {
             console.warn('[Mailbox] PUBLIC_URL not set — skipping subscription registration. Add ngrok URL to .env as PUBLIC_URL.');
         }
 
-        // Daily cron at 8am AEST (UTC+10) = 22:00 UTC
-        // Dispatches any due follow-ups
         cron.schedule('0 22 * * *', async () => {
             console.log('[Cron] Running daily follow-up dispatch...');
             try { await runFollowUpCron(); } catch (e) { console.error('[Cron] Follow-up error:', e.message); }
         });
 
-        // Daily cron at 2am to renew the mailbox subscription before it expires
         cron.schedule('0 16 * * *', async () => {
             console.log('[Cron] Renewing mailbox subscription...');
             if (publicUrl) {

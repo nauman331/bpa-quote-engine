@@ -1,6 +1,3 @@
-/**
- * Generates the exact HTML body matching the production .eml files.
- */
 const buildQuoteEmailHtml = ({ recipientFirstName, projectName }) => {
     return `<!DOCTYPE html>
 <html>
@@ -44,9 +41,6 @@ const buildQuoteEmailHtml = ({ recipientFirstName, projectName }) => {
 </html>`;
 };
 
-/**
- * Dispatches the email via the Microsoft Graph API.
- */
 const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBuffer) => {
     if (process.env.ENABLE_AUTOMATION !== 'true' || process.env.DISPATCH_EMAILS === 'false' || process.env.DRY_RUN === 'true') {
         console.log(`[DRY RUN] Outbound quote email skipped: "${subject}" -> ${recipientEmail}`);
@@ -55,7 +49,6 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
 
     console.log(`[M2] Authenticating with Azure for Tenant: ${process.env.AZURE_TENANT_ID}...`);
 
-    // 1. Get Azure OAuth Token (Client Credentials Flow)
     const tokenRes = await fetch(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -72,19 +65,14 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
         throw new Error(`Azure Auth Failed: ${JSON.stringify(tokenData)}`);
     }
 
-    // 2. Determine Routing based on Brand
-    // Check for both 'brisbane' and 'bpa'
     const isBrisbane = brand.toLowerCase().includes('brisbane') || brand.toLowerCase() === 'bpa';
     const senderAddress = isBrisbane ? process.env.BPA_SALES_EMAIL : process.env.GCPA_SALES_EMAIL;
     const hubspotBcc = isBrisbane ? process.env.BPA_HUBSPOT_BCC : process.env.GCPA_HUBSPOT_BCC;
 
-    // 3. Extract variables for the email body
-    // Grabs "Emma" from "emma.smith@builder.com"
     const firstName = recipientEmail.split('@')[0].split('.')[0].replace(/^\w/, c => c.toUpperCase());
-    // Grabs project name from the subject line string
+
     const projectName = subject.split(' - ').slice(2).join(' - ');
 
-    // 4. Construct Microsoft Graph Mail Payload
     const messagePayload = {
         message: {
             subject: subject,
@@ -102,7 +90,7 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
                     "@odata.type": "#microsoft.graph.fileAttachment",
                     name: pdfFileName,
                     contentType: "application/pdf",
-                    contentBytes: pdfBuffer.toString('base64') // Encodes our mock buffer into the attachment
+                    contentBytes: pdfBuffer.toString('base64')
                 }
             ]
         },
@@ -111,7 +99,6 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
 
     console.log(`[M2] Sending email from ${senderAddress} to ${recipientEmail}...`);
 
-    // 5. Send the Email with 429 retry + exponential backoff
     let lastError;
     for (let attempt = 1; attempt <= 3; attempt++) {
         const sendRes = await fetch(`https://graph.microsoft.com/v1.0/users/${senderAddress}/sendMail`, {
@@ -137,7 +124,6 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
             continue;
         }
 
-        // Any other error — fail immediately
         const errorData = await sendRes.json();
         throw new Error(`Graph API Send Failed: ${JSON.stringify(errorData)}`);
     }

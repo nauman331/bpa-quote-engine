@@ -1,4 +1,3 @@
-
 const buildCanonicalTitle = (brand, tier, clientName, projectName) => {
     const cleanClient = clientName.trim();
     const cleanProject = projectName.trim();

@@ -1,12 +1,5 @@
-/**
- * src/services/followUpService.js
- * Dispatches follow-up emails and call prompts based on the follow-up schedule.
- * Called by the daily cron job in app.js.
- */
 const { getDueFollowUps, markFollowUpSent } = require('./supabaseService');
 const { getGraphToken } = require('./graphAuth');
-
-// ─── Follow-up email templates ──────────────────────────────────────────────
 
 const buildTouch1Html = ({ clientName, projectName }) => `<!DOCTYPE html>
 <html><body style="font-family: Aptos, sans-serif; font-size: 12pt; color: rgb(36,36,36);">
@@ -26,8 +19,8 @@ const buildTouch2Html = ({ clientName, projectName }) => `<!DOCTYPE html>
 <html><body style="font-family: Aptos, sans-serif; font-size: 12pt; color: rgb(36,36,36);">
 <div>Hi ${clientName},</div><br>
 <div>I'm Chris Turner, Director of Brisbane Pump Action.</div><br>
-<div>I wanted to personally reach out regarding our rates for <b>${projectName}</b>. 
-We've been pumping concrete across South East Queensland for over 20 years and I'd love to discuss 
+<div>I wanted to personally reach out regarding our rates for <b>${projectName}</b>.
+We've been pumping concrete across South East Queensland for over 20 years and I'd love to discuss
 how we can support your project.</div><br>
 <div>If you have a moment, I'd welcome a quick call — 0461 459 755.</div><br>
 <div>Kind regards,</div><br>
@@ -37,8 +30,6 @@ how we can support your project.</div><br>
   <div style="font-size:10pt;color:rgb(89,89,89);">Ph: 0461 459 755</div>
 </div>
 </body></html>`;
-
-// ─── Dispatcher ──────────────────────────────────────────────────────────────
 
 const sendFollowUpEmail = async (followUp, htmlBody) => {
     const token = await getGraphToken();
@@ -75,9 +66,6 @@ const sendFollowUpEmail = async (followUp, htmlBody) => {
     }
 };
 
-/**
- * Main runner — called by cron. Fetches all due follow-ups and dispatches them.
- */
 const runFollowUpCron = async () => {
     if (process.env.ENABLE_AUTOMATION !== 'true') {
         console.log('[FollowUp] ⏸️  Automation is paused (ENABLE_AUTOMATION!=true) — skipping follow-up cron.');
@@ -95,15 +83,15 @@ const runFollowUpCron = async () => {
     for (const followUp of due) {
         try {
             if (followUp.type === 'call_prompt') {
-                // Touch 3 — Phone call prompt. Log it but don't send an email.
+
                 console.log(`[FollowUp] ⚠️  CALL PROMPT due for ${followUp.client_name} re: ${followUp.project_name} — assign to Chris.`);
-                // TODO: In Phase E, write this to the CRM dashboard as a task notification.
+
                 await markFollowUpSent(followUp.id);
                 continue;
             }
 
             if (followUp.type === 're_engage_prompt') {
-                // Touch 4 (Outcome) — 30-day re-engage. Log it as 'No contact' final outcome.
+
                 console.log(`[FollowUp] ⚠️  RE-ENGAGE (NO CONTACT) due for ${followUp.client_name} re: ${followUp.project_name}. Total 51 days passed.`);
                 await markFollowUpSent(followUp.id);
                 continue;

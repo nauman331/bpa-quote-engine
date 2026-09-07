@@ -1,7 +1,3 @@
-/**
- * src/services/supabaseService.js
- * Supabase persistence layer — all DB writes go through here.
- */
 const { createClient } = require('@supabase/supabase-js');
 
 let supabase;
@@ -15,10 +11,6 @@ const getClient = () => {
     return supabase;
 };
 
-/**
- * Inserts a raw inbound lead into the `leads` table.
- * Returns the inserted row (with id).
- */
 const insertLead = async ({ source, payload, urgency, urgencyReason }) => {
     const db = getClient();
     const { data, error } = await db
@@ -31,9 +23,6 @@ const insertLead = async ({ source, payload, urgency, urgencyReason }) => {
     return data;
 };
 
-/**
- * Inserts a quote record linked to a lead.
- */
 const insertQuote = async ({ leadId, canonicalTitle, pdfFileName }) => {
     const db = getClient();
     const { data, error } = await db
@@ -46,9 +35,6 @@ const insertQuote = async ({ leadId, canonicalTitle, pdfFileName }) => {
     return data;
 };
 
-/**
- * Inserts a send record linked to a quote.
- */
 const insertSend = async ({ quoteId, recipientEmail, status = 'sent' }) => {
     const db = getClient();
     const { data, error } = await db
@@ -61,10 +47,6 @@ const insertSend = async ({ quoteId, recipientEmail, status = 'sent' }) => {
     return data;
 };
 
-/**
- * Schedules the three follow-up touches for a given send.
- * Offsets: 7 days, 14 days, 21 days.
- */
 const scheduleFollowUps = async ({ sendId, recipientEmail, canonicalTitle, brand, clientName, projectName }) => {
     const db = getClient();
     const now = new Date();
@@ -92,17 +74,11 @@ const scheduleFollowUps = async ({ sendId, recipientEmail, canonicalTitle, brand
     console.log(`[DB] Scheduled 3 follow-ups for sendId=${sendId}`);
 };
 
-/**
- * Writes an audit log entry.
- */
 const writeAuditLog = async (eventType, payload) => {
     const db = getClient();
     await db.from('audit_log').insert({ event_type: eventType, payload });
 };
 
-/**
- * Fetches all pending follow-ups that are due (send_at <= now).
- */
 const getDueFollowUps = async () => {
     const db = getClient();
     const { data, error } = await db
@@ -114,17 +90,11 @@ const getDueFollowUps = async () => {
     return data || [];
 };
 
-/**
- * Marks a follow-up as sent.
- */
 const markFollowUpSent = async (id) => {
     const db = getClient();
     await db.from('follow_ups').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
 };
 
-/**
- * Fetches recent leads for the dashboard.
- */
 const getRecentLeads = async (limit = 50) => {
     const db = getClient();
     const { data, error } = await db.from('leads').select('*').order('created_at', { ascending: false }).limit(limit);
@@ -132,9 +102,6 @@ const getRecentLeads = async (limit = 50) => {
     return data;
 };
 
-/**
- * Fetches recent quotes for the dashboard (with lead details if joined).
- */
 const getRecentQuotes = async (limit = 50) => {
     const db = getClient();
     const { data, error } = await db.from('quotes').select('*, leads(*)').order('created_at', { ascending: false }).limit(limit);
@@ -142,9 +109,6 @@ const getRecentQuotes = async (limit = 50) => {
     return data;
 };
 
-/**
- * Fetches upcoming pending follow-ups.
- */
 const getPendingFollowUps = async (limit = 50) => {
     const db = getClient();
     const { data, error } = await db.from('follow_ups').select('*').eq('status', 'pending').order('send_at', { ascending: true }).limit(limit);
@@ -152,9 +116,6 @@ const getPendingFollowUps = async (limit = 50) => {
     return data;
 };
 
-/**
- * Fetches top-level dashboard stats.
- */
 const getDashboardStats = async () => {
     const db = getClient();
     const [leadsReq, quotesReq, pendingReq] = await Promise.all([
@@ -169,28 +130,25 @@ const getDashboardStats = async () => {
     };
 };
 
-/**
- * Verifies if a deal successfully synced from HubSpot into the crm_records mirror.
- */
 const verifyDealInMirror = async (canonicalTitle) => {
     const db = getClient();
     const { data, error } = await db
         .from('crm_records')
         .select('*')
-        // Using ilike or checking if the title exists
+
         .ilike('deal_name', `%${canonicalTitle}%`)
         .limit(1);
-    
+
     if (error) {
         console.error(`[Mirror Check] DB error checking mirror for ${canonicalTitle}:`, error.message);
         return false;
     }
-    
+
     if (data && data.length > 0) {
         console.log(`[Mirror Check] SUCCESS: Deal for ${canonicalTitle} found in mirror.`);
         return true;
     }
-    
+
     console.warn(`[Mirror Check] WARNING: Deal for ${canonicalTitle} NOT found in mirror after sync window.`);
     return false;
 };
@@ -210,4 +168,3 @@ module.exports = {
     verifyDealInMirror,
     getClient,
 };
-

@@ -1,10 +1,3 @@
-/**
- * src/services/classifyService.js
- * Calls Claude Haiku to:
- * 1. Validate if an email is a genuine lead (isLead)
- * 2. Extract Builder and Project name smartly from unstructured text
- * 3. Classify urgency as hot / warm / cold
- */
 const Anthropic = require('@anthropic-ai/sdk');
 
 let client;
@@ -38,16 +31,11 @@ Respond ONLY with valid JSON in this exact format:
   "reason": "<one sentence explanation>"
 }`;
 
-/**
- * Analyzes an email body + subject via Claude Haiku.
- * @param {string} subject - Email subject line
- * @param {string} body    - Plain-text email body
- */
 const analyzeLeadEmail = async (subject, body) => {
     if (!process.env.ANTHROPIC_API_KEY) {
         console.warn('[Classify] No ANTHROPIC_API_KEY set — skipping AI validation.');
         return {
-            isLead: true, // Assume true if no AI
+            isLead: true,
             builderName: null,
             projectName: null,
             urgency: 'warm',
@@ -69,9 +57,9 @@ const analyzeLeadEmail = async (subject, body) => {
         });
 
         const raw = response.content[0].text.trim()
-            .replace(/^```json\s*/i, '')  // strip opening ```json
-            .replace(/^```\s*/i, '')      // strip opening ``` (no lang)
-            .replace(/\s*```$/, '')       // strip closing ```
+            .replace(/^```json\s*/i, '')
+            .replace(/^```\s*/i, '')
+            .replace(/\s*```$/, '')
             .trim();
         const parsed = JSON.parse(raw);
         console.log(`[Classify] isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
@@ -83,4 +71,3 @@ const analyzeLeadEmail = async (subject, body) => {
 };
 
 module.exports = { analyzeLeadEmail };
-

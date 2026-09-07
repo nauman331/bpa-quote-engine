@@ -13,7 +13,7 @@ const getDashboardData = async (req, res) => {
             getRecentQuotes(20),
             getPendingFollowUps(20)
         ]);
-        
+
         res.status(200).json({
             stats,
             leads,

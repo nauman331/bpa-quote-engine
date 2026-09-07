@@ -8,14 +8,13 @@ const { appendExcelLog } = require('../services/excelService');
 
 const handleGenerateAndSend = async (req, res) => {
     try {
-        // 1. Ingest & Validate Incoming Lead Data (M0)
+
         const validation = validateQuoteData(req.body);
         if (!validation.isValid) {
             return res.status(400).json({ status: 'error', message: validation.errors });
         }
         const payload = validation.data;
 
-        // 2. Format Naming Conventions
         const canonicalTitle = buildCanonicalTitle(
             payload.brand,
             payload.tier,
@@ -26,13 +25,10 @@ const handleGenerateAndSend = async (req, res) => {
 
         console.log(`[M0] Ingested live lead for: ${canonicalTitle}`);
 
-        // 3. Retrieve or Generate PDF via Cache (M1)
         const pdfBuffer = await getCachedOrGeneratePdf(payload.brand, payload.productFamily, payload.tier);
 
-        // 4. Archive to SharePoint/OneDrive (M1)
         await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
 
-        // 6. Dispatch Email via Graph (M2)
         await sendQuoteEmail(
             payload.brand,
             payload.recipientEmail,
@@ -41,7 +37,6 @@ const handleGenerateAndSend = async (req, res) => {
             pdfBuffer
         );
 
-        // 7. Persist to Supabase + Excel + schedule follow-ups
         try {
             const quote = await insertQuote({ leadId: null, canonicalTitle, pdfFileName });
             const send  = await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail });
@@ -54,17 +49,15 @@ const handleGenerateAndSend = async (req, res) => {
                 projectName:  payload.projectName,
             });
             await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail });
-            
-            // Generate SPN and append to Excel Log
+
             await appendExcelLog(canonicalTitle, payload.clientName, payload.projectName, payload.recipientEmail);
-            
-            // 8. Verify deal appeared in mirror (Async polling)
+
             setTimeout(() => {
                 verifyDealInMirror(canonicalTitle).catch(console.error);
-            }, 60000); // Check after 60 seconds to allow HubSpot processing
-            
+            }, 60000);
+
         } catch (dbErr) {
-            // DB failure must NEVER block the email send — log and continue
+
             console.error('[DB] Persistence/Excel write failed (non-blocking):', dbErr.message);
         }
 
@@ -84,10 +77,10 @@ const handleDownloadQuote = async (req, res) => {
     try {
         const { file } = req.query;
         if (!file) return res.status(400).json({ error: 'file query parameter is required' });
-        
+
         const { downloadPdfFromArchive } = require('../services/archiveService');
         const pdfBuffer = await downloadPdfFromArchive(file);
-        
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `inline; filename="${file}"`);
         res.send(pdfBuffer);

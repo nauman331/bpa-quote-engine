@@ -1,7 +1,3 @@
-/**
- * src/services/graphAuth.js
- * Generates an OAuth token for Microsoft Graph using Client Credentials.
- */
 const getGraphToken = async () => {
     const tokenRes = await fetch(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`, {
         method: 'POST',
