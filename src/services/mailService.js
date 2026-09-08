@@ -1,13 +1,19 @@
+const { escapeHtml } = require('../utils/sanitize');
+const { canDispatchEmails } = require('../utils/safetyGuards');
+
 const buildQuoteEmailHtml = ({ recipientFirstName, projectName }) => {
+    const safeFirstName = escapeHtml(recipientFirstName);
+    const safeProject = escapeHtml(projectName);
+
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=Windows-1252">
 </head>
 <body dir="ltr" style="font-family: Aptos, sans-serif; font-size: 12pt; color: rgb(36, 36, 36);">
-<div>Hi ${recipientFirstName},</div>
+<div>Hi ${safeFirstName},</div>
 <br>
-<div><b>Schedule of Rates – Concrete Pumping at ${projectName}</b></div>
+<div><b>Schedule of Rates – Concrete Pumping at ${safeProject}</b></div>
 <br>
 <div>We would like to supply you with our rates for the concrete pumping works, please see our schedule of rates attached.</div>
 <br>
@@ -42,8 +48,13 @@ const buildQuoteEmailHtml = ({ recipientFirstName, projectName }) => {
 };
 
 const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBuffer) => {
-    if (process.env.ENABLE_AUTOMATION !== 'true' || process.env.DISPATCH_EMAILS === 'false' || process.env.DRY_RUN === 'true') {
-        console.log(`[DRY RUN] Outbound quote email skipped: "${subject}" -> ${recipientEmail}`);
+    if (!recipientEmail) {
+        console.warn(`[Mail] No recipient email specified for subject: "${subject}" — send aborted.`);
+        return;
+    }
+
+    if (!canDispatchEmails()) {
+        console.log(`[DRY RUN / PAUSED] Outbound quote email skipped: "${subject}" -> ${recipientEmail}`);
         return;
     }
 
@@ -65,13 +76,16 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
         throw new Error(`Azure Auth Failed: ${JSON.stringify(tokenData)}`);
     }
 
-    const isBrisbane = brand.toLowerCase().includes('brisbane') || brand.toLowerCase() === 'bpa';
+    const brandStr = (brand || '').toLowerCase();
+    const isBrisbane = brandStr.includes('brisbane') || brandStr === 'bpa';
     const senderAddress = isBrisbane ? process.env.BPA_SALES_EMAIL : process.env.GCPA_SALES_EMAIL;
     const hubspotBcc = isBrisbane ? process.env.BPA_HUBSPOT_BCC : process.env.GCPA_HUBSPOT_BCC;
 
-    const firstName = recipientEmail.split('@')[0].split('.')[0].replace(/^\w/, c => c.toUpperCase());
+    const firstName = recipientEmail.includes('@')
+        ? recipientEmail.split('@')[0].split('.')[0].replace(/^\w/, c => c.toUpperCase())
+        : 'Valued Client';
 
-    const projectName = subject.split(' - ').slice(2).join(' - ');
+    const projectName = (subject || '').split(' - ').slice(2).join(' - ') || 'Upcoming Project';
 
     const messagePayload = {
         message: {
@@ -84,11 +98,11 @@ const sendQuoteEmail = async (brand, recipientEmail, subject, pdfFileName, pdfBu
             bccRecipients: [
                 { emailAddress: { address: hubspotBcc } },
                 { emailAddress: { address: process.env.ACCOUNTS_BCC } }
-            ],
+            ].filter(b => Boolean(b.emailAddress.address)),
             attachments: [
                 {
                     "@odata.type": "#microsoft.graph.fileAttachment",
-                    name: pdfFileName,
+                    name: pdfFileName || 'Schedule_of_Rates.pdf',
                     contentType: "application/pdf",
                     contentBytes: pdfBuffer.toString('base64')
                 }

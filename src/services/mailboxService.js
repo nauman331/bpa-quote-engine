@@ -33,7 +33,7 @@ const createOrRenewSubscription = async (notificationUrl) => {
             notificationUrl,
             resource: `users/${SHARED_MAILBOX}/mailFolders/Inbox/messages`,
             expirationDateTime: expiryDate.toISOString(),
-            clientState: process.env.MAILBOX_CLIENT_STATE || 'bpa-sales-engine-secret'
+            clientState: process.env.MAILBOX_CLIENT_STATE
         })
     });
     const createData = await createRes.json();

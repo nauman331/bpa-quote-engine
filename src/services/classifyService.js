@@ -44,14 +44,15 @@ const analyzeLeadEmail = async (subject, body) => {
     }
 
     try {
+        const modelName = process.env.ANTHROPIC_MODEL;
         const response = await getClient().messages.create({
-            model: 'claude-haiku-4-5-20251001',
+            model: modelName,
             max_tokens: 256,
             system: SYSTEM_PROMPT,
             messages: [
                 {
                     role: 'user',
-                    content: `Subject: ${subject}\n\n${body.substring(0, 2000)}`
+                    content: `Subject: ${subject || ''}\n\n${(body || '').substring(0, 2000)}`
                 }
             ]
         });
@@ -62,7 +63,7 @@ const analyzeLeadEmail = async (subject, body) => {
             .replace(/\s*```$/, '')
             .trim();
         const parsed = JSON.parse(raw);
-        console.log(`[Classify] isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
+        console.log(`[Classify] model=${modelName} | isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
         return parsed;
     } catch (err) {
         console.warn('[Classify] Claude call failed:', err.message);

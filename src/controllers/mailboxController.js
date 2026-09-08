@@ -1,11 +1,12 @@
 const { fetchMessage } = require('../services/mailboxService');
 const { parseInboundEmail } = require('../services/parseService');
 const { analyzeLeadEmail } = require('../services/classifyService');
-const { insertLead, insertQuote, insertSend, scheduleFollowUps, writeAuditLog } = require('../services/supabaseService');
+const { insertLead, insertQuote, insertSend, scheduleFollowUps, writeAuditLog, hasRecentQuoteForRecipient } = require('../services/supabaseService');
 const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingService');
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
+const { canDispatchEmails, canWriteSharePoint, isDryRun } = require('../utils/safetyGuards');
 
 const processedMessages = new Set();
 
@@ -28,7 +29,6 @@ const isLeadEmail = (message) => {
 };
 
 const handleMailboxNotification = async (req, res) => {
-
     if (req.query.validationToken) {
         console.log('[Mailbox] Subscription validation request received.');
         return res.status(200).set('Content-Type', 'text/plain').send(req.query.validationToken);
@@ -45,8 +45,7 @@ const handleMailboxNotification = async (req, res) => {
 
     for (const notification of notifications) {
         try {
-
-            const expectedState = process.env.MAILBOX_CLIENT_STATE || 'bpa-sales-engine-secret';
+            const expectedState = process.env.MAILBOX_CLIENT_STATE;
             if (notification.clientState !== expectedState) {
                 console.warn('[Mailbox] Invalid clientState — ignoring.');
                 continue;
@@ -64,6 +63,10 @@ const handleMailboxNotification = async (req, res) => {
             console.log(`[Mailbox] New email received. Fetching messageId=${messageId}...`);
 
             const message = await fetchMessage(messageId);
+            if (!message) {
+                console.warn(`[Mailbox] Message ${messageId} could not be fetched.`);
+                continue;
+            }
 
             if (!isLeadEmail(message)) {
                 console.log(`[Mailbox] Skipping non-lead email: "${message.subject}" from ${message.from?.emailAddress?.address}`);
@@ -81,8 +84,8 @@ const handleMailboxNotification = async (req, res) => {
                 continue;
             }
 
-            const finalBuilderName = aiAnalysis.builderName || parsed.builderName;
-            const finalProjectName = aiAnalysis.projectName || parsed.projectName;
+            const finalBuilderName = aiAnalysis.builderName || parsed.builderName || 'General Client';
+            const finalProjectName = aiAnalysis.projectName || parsed.projectName || 'General Works';
 
             console.log(`[Mailbox] Final Lead: source=${parsed.source}, builder=${finalBuilderName}, project=${finalProjectName}`);
 
@@ -107,11 +110,25 @@ const handleMailboxNotification = async (req, res) => {
             const pdfFileName = buildPdfFileName(canonicalTitle);
             console.log(`[M0] Ingested: ${canonicalTitle}`);
 
+            const isDuplicate = await hasRecentQuoteForRecipient(recipientEmail, canonicalTitle);
+            if (isDuplicate) {
+                console.log(`[Mailbox] Duplicate quote prevented: ${canonicalTitle} already dispatched to ${recipientEmail} in last 24h.`);
+                continue;
+            }
+
             const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
 
-            await uploadPdfToArchive(brand, productFamily, pdfFileName, pdfBuffer);
+            if (canWriteSharePoint()) {
+                await uploadPdfToArchive(brand, productFamily, pdfFileName, pdfBuffer);
+            } else {
+                console.log(`[Mailbox] [DRY RUN / PAUSED] SharePoint upload skipped for ${pdfFileName}`);
+            }
 
-            await sendQuoteEmail(brand, recipientEmail, canonicalTitle, pdfFileName, pdfBuffer);
+            if (canDispatchEmails()) {
+                await sendQuoteEmail(brand, recipientEmail, canonicalTitle, pdfFileName, pdfBuffer);
+            } else {
+                console.log(`[Mailbox] [DRY RUN / PAUSED] Outbound email skipped for ${recipientEmail}`);
+            }
 
             const quote = await insertQuote({ leadId: lead.id, canonicalTitle, pdfFileName });
             const send = await insertSend({ quoteId: quote.id, recipientEmail });
@@ -123,7 +140,7 @@ const handleMailboxNotification = async (req, res) => {
                 clientName: finalBuilderName,
                 projectName: finalProjectName,
             });
-            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency });
+            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency, dryRun: isDryRun() });
 
             console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${(aiAnalysis.urgency || 'N/A').toUpperCase()}]`);
 

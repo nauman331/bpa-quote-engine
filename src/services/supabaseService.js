@@ -135,7 +135,6 @@ const verifyDealInMirror = async (canonicalTitle) => {
     const { data, error } = await db
         .from('crm_records')
         .select('*')
-
         .ilike('deal_name', `%${canonicalTitle}%`)
         .limit(1);
 
@@ -153,6 +152,25 @@ const verifyDealInMirror = async (canonicalTitle) => {
     return false;
 };
 
+const hasRecentQuoteForRecipient = async (recipientEmail, canonicalTitle) => {
+    try {
+        const db = getClient();
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await db
+            .from('quotes')
+            .select('id, created_at, canonical_title, sends!inner(recipient_email)')
+            .eq('canonical_title', canonicalTitle)
+            .eq('sends.recipient_email', recipientEmail)
+            .gte('created_at', oneDayAgo)
+            .limit(1);
+
+        if (error) return false;
+        return Boolean(data && data.length > 0);
+    } catch {
+        return false;
+    }
+};
+
 module.exports = {
     insertLead,
     insertQuote,
@@ -166,5 +184,6 @@ module.exports = {
     getPendingFollowUps,
     getDashboardStats,
     verifyDealInMirror,
+    hasRecentQuoteForRecipient,
     getClient,
 };

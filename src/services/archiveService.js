@@ -1,7 +1,8 @@
 const { getGraphToken } = require('./graphAuth');
+const { canWriteSharePoint } = require('../utils/safetyGuards');
 
 const getFolderPaths = (brand, productFamily, tier) => {
-    const isBPA = brand.toLowerCase().includes('brisbane') || brand.toLowerCase() === 'bpa';
+    const isBPA = (brand || '').toLowerCase().includes('brisbane') || (brand || '').toLowerCase() === 'bpa';
     const driveId = isBPA ? process.env.BPA_DRIVE_ID : process.env.GCPA_DRIVE_ID;
 
     let folderProduct = 'Mobile Pumps';
@@ -23,7 +24,11 @@ const getFolderPaths = (brand, productFamily, tier) => {
     } else if (folderProduct === 'Static Line Satellite Rates') {
         archiveFolderName = 'Price Lists sent - Satellite';
     }
-    const archivePath = `${folderProduct}/${archiveFolderName}`;
+
+    const stagingFolder = process.env.SHAREPOINT_ARCHIVE_FOLDER;
+    const archivePath = stagingFolder
+        ? `${stagingFolder}/${folderProduct}/${archiveFolderName}`
+        : `${folderProduct}/${archiveFolderName}`;
 
     return { driveId, templateFolderPath, archivePath };
 };
@@ -43,7 +48,7 @@ const downloadTemplate = async (brand, productFamily, tier) => {
     if (!listRes.ok) throw new Error(`Failed to list template folder: ${await listRes.text()}`);
     const listData = await listRes.json();
 
-    const validFiles = listData.value.filter(file => !file.folder && (file.name.endsWith('.docx') || file.name.endsWith('.doc')));
+    const validFiles = (listData.value || []).filter(file => !file.folder && (file.name.endsWith('.docx') || file.name.endsWith('.doc')));
     const templateFile = validFiles.find(file => file.name.endsWith('.docx')) || validFiles.find(file => file.name.endsWith('.doc'));
     if (!templateFile) {
         throw new Error(`No .docx or .doc template found in ${templateFolderPath}`);
@@ -63,11 +68,15 @@ const downloadTemplate = async (brand, productFamily, tier) => {
 };
 
 const uploadPdfToArchive = async (brand, productFamily, rawFileName, pdfBuffer) => {
-    const token = await getGraphToken();
     const { driveId: siteId, archivePath } = getFolderPaths(brand, productFamily, null);
+    const safeFileName = (rawFileName || 'Quote.pdf').replace(/[/#?%\\]/g, '-');
 
-    const safeFileName = rawFileName.replace(/[/#?%\\]/g, '-');
+    if (!canWriteSharePoint()) {
+        console.log(`[Archive] [DRY RUN / PAUSED] SharePoint upload skipped for "${safeFileName}" to "${archivePath}".`);
+        return;
+    }
 
+    const token = await getGraphToken();
     const fullPath = `${archivePath}/${safeFileName}`;
     const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
 
@@ -90,14 +99,14 @@ const uploadPdfToArchive = async (brand, productFamily, rawFileName, pdfBuffer) 
 const downloadPdfFromArchive = async (fileName) => {
     const token = await getGraphToken();
 
-    const brand = fileName.toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
+    const brand = (fileName || '').toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
     let productFamily = 'Mobile Pumps';
-    if (fileName.toLowerCase().includes('spider')) productFamily = 'Spider';
-    if (fileName.toLowerCase().includes('satellite')) productFamily = 'Satellite';
+    if ((fileName || '').toLowerCase().includes('spider')) productFamily = 'Spider';
+    if ((fileName || '').toLowerCase().includes('satellite')) productFamily = 'Satellite';
 
     const { driveId: siteId, archivePath } = getFolderPaths(brand, productFamily, null);
 
-    const safeFileName = fileName.replace(/[/#?%\\]/g, '-');
+    const safeFileName = (fileName || '').replace(/[/#?%\\]/g, '-');
     const fullPath = `${archivePath}/${safeFileName}`;
     const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
 

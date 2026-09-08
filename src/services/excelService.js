@@ -1,8 +1,10 @@
+const crypto = require('crypto');
 const { getGraphToken } = require('./graphAuth');
+const { sanitizeExcelCell } = require('../utils/sanitize');
+const { canWriteSharePoint } = require('../utils/safetyGuards');
 
 const appendExcelLog = async (canonicalTitle, clientName, projectName, recipientEmail) => {
     try {
-        const token = await getGraphToken();
         const driveId = process.env.SHAREPOINT_DRIVE_ID;
         const excelItemId = process.env.EXCEL_LOG_ITEM_ID;
 
@@ -11,12 +13,24 @@ const appendExcelLog = async (canonicalTitle, clientName, projectName, recipient
             return;
         }
 
-        const spnNumber = `SPN-${Date.now().toString().slice(-6)}`;
+        const spnNumber = `SPN-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
         const dateStr = new Date().toLocaleDateString();
+
+        if (!canWriteSharePoint()) {
+            console.log(`[Excel] [DRY RUN / PAUSED] Excel append skipped for SPN: ${spnNumber}`);
+            return;
+        }
+
+        const token = await getGraphToken();
+
+        const safeClientName = sanitizeExcelCell(clientName);
+        const safeProjectName = sanitizeExcelCell(projectName);
+        const safeRecipientEmail = sanitizeExcelCell(recipientEmail);
+        const safeCanonicalTitle = sanitizeExcelCell(canonicalTitle);
 
         const payload = {
             values: [
-                [dateStr, spnNumber, clientName, projectName, recipientEmail, canonicalTitle]
+                [dateStr, spnNumber, safeClientName, safeProjectName, safeRecipientEmail, safeCanonicalTitle]
             ]
         };
 
@@ -38,7 +52,6 @@ const appendExcelLog = async (canonicalTitle, clientName, projectName, recipient
 
         console.log(`[Excel] Successfully appended SPN log: ${spnNumber}`);
     } catch (error) {
-
         console.error('[Excel] Failed to append Excel log:', error.message);
     }
 };
