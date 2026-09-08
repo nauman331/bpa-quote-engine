@@ -12,6 +12,10 @@ const authMiddleware = (req, res, next) => {
         }
     }
 
+    if (!providedKey && req.query) {
+        providedKey = req.query.apiKey || req.query.api_key || req.query.key;
+    }
+
     if (!configuredKey || !providedKey || providedKey !== configuredKey) {
         return res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
     }

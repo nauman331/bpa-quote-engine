@@ -6,6 +6,7 @@ const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingSer
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
+const { appendExcelLog } = require('../services/excelService');
 const { canDispatchEmails, canWriteSharePoint, isDryRun } = require('../utils/safetyGuards');
 
 const processedMessages = new Set();
@@ -141,6 +142,12 @@ const handleMailboxNotification = async (req, res) => {
                 projectName: finalProjectName,
             });
             await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency, dryRun: isDryRun() });
+
+            if (canWriteSharePoint()) {
+                await appendExcelLog(canonicalTitle, finalBuilderName, finalProjectName, recipientEmail);
+            } else {
+                console.log(`[Mailbox] [DRY RUN / PAUSED] Excel log append skipped for ${canonicalTitle}`);
+            }
 
             console.log(`[Mailbox] ✅ Full pipeline complete: ${canonicalTitle} → ${recipientEmail} [${(aiAnalysis.urgency || 'N/A').toUpperCase()}]`);
 

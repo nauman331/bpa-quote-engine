@@ -25,14 +25,16 @@ const handleGenerateAndSend = async (req, res) => {
 
         console.log(`[M0] Ingested quote request for: ${canonicalTitle}`);
 
-        const isDuplicate = await hasRecentQuoteForRecipient(payload.recipientEmail, canonicalTitle);
-        if (isDuplicate) {
-            console.warn(`[Quote] Duplicate send prevented: quote for ${canonicalTitle} already sent to ${payload.recipientEmail} in last 24h.`);
-            return res.status(409).json({
-                status: 'skipped',
-                message: 'A quote for this project was already dispatched to this recipient within the last 24 hours.',
-                data: { canonicalTitle, pdfFileName }
-            });
+        if (payload.recipientEmail) {
+            const isDuplicate = await hasRecentQuoteForRecipient(payload.recipientEmail, canonicalTitle);
+            if (isDuplicate) {
+                console.warn(`[Quote] Duplicate send prevented: quote for ${canonicalTitle} already sent to ${payload.recipientEmail} in last 24h.`);
+                return res.status(409).json({
+                    status: 'skipped',
+                    message: 'A quote for this project was already dispatched to this recipient within the last 24 hours.',
+                    data: { canonicalTitle, pdfFileName }
+                });
+            }
         }
 
         const pdfBuffer = await getCachedOrGeneratePdf(payload.brand, payload.productFamily, payload.tier);
@@ -43,7 +45,7 @@ const handleGenerateAndSend = async (req, res) => {
             console.log(`[Quote] [DRY RUN / PAUSED] SharePoint upload skipped for ${pdfFileName}`);
         }
 
-        if (canDispatchEmails()) {
+        if (payload.recipientEmail && canDispatchEmails()) {
             await sendQuoteEmail(
                 payload.brand,
                 payload.recipientEmail,
@@ -52,24 +54,26 @@ const handleGenerateAndSend = async (req, res) => {
                 pdfBuffer
             );
         } else {
-            console.log(`[Quote] [DRY RUN / PAUSED] Outbound email skipped for ${payload.recipientEmail}`);
+            console.log(`[Quote] [DRY RUN / PAUSED] Outbound email skipped for ${payload.recipientEmail || 'unspecified recipient'}`);
         }
 
         try {
             const quote = await insertQuote({ leadId: null, canonicalTitle, pdfFileName });
-            const send = await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail });
-            await scheduleFollowUps({
-                sendId: send.id,
-                recipientEmail: payload.recipientEmail,
-                canonicalTitle,
-                brand: payload.brand,
-                clientName: payload.clientName,
-                projectName: payload.projectName,
-            });
-            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail, dryRun: isDryRun() });
+            if (payload.recipientEmail) {
+                const send = await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail });
+                await scheduleFollowUps({
+                    sendId: send.id,
+                    recipientEmail: payload.recipientEmail,
+                    canonicalTitle,
+                    brand: payload.brand,
+                    clientName: payload.clientName,
+                    projectName: payload.projectName,
+                });
+            }
+            await writeAuditLog('quote_sent', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail || null, dryRun: isDryRun() });
 
             if (canWriteSharePoint()) {
-                await appendExcelLog(canonicalTitle, payload.clientName, payload.projectName, payload.recipientEmail);
+                await appendExcelLog(canonicalTitle, payload.clientName, payload.projectName, payload.recipientEmail || 'N/A');
             } else {
                 console.log(`[Quote] [DRY RUN / PAUSED] Excel log append skipped for ${canonicalTitle}`);
             }

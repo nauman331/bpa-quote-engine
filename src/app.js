@@ -7,6 +7,7 @@ const mailboxRoutes = require('./routes/mailboxRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const authRoutes = require('./routes/authRoutes');
 const { createOrRenewSubscription } = require('./services/mailboxService');
 const { runFollowUpCron } = require('./services/followUpService');
 
@@ -15,6 +16,7 @@ const startApp = () => {
     app.use(express.json());
     app.use(cors());
 
+    app.use('/api/auth', authRoutes);
     app.use('/api/quotes', quoteRoutes);
     app.use('/api/webhook', mailboxRoutes);
     app.use('/api/dashboard', dashboardRoutes);

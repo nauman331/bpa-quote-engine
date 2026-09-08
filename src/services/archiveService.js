@@ -110,9 +110,40 @@ const downloadPdfFromArchive = async (fileName) => {
     const fullPath = `${archivePath}/${safeFileName}`;
     const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
 
-    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/content`, {
+    let res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/content`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
+
+    if (!res.ok) {
+        let folderProduct = 'Mobile Pumps';
+        if (productFamily.includes('Spider')) folderProduct = 'Spider Boom';
+        if (productFamily.includes('Satellite')) folderProduct = 'Static Line Satellite Rates';
+        const isBPA = brand === 'BPA';
+        let archiveFolderName = isBPA ? 'Price Lists sent Mobile Pumps' : 'GCPA Price Lists Sent Mobile Pumps';
+        if (folderProduct === 'Spider Boom') archiveFolderName = 'Spider Boom Prices List sent';
+        if (folderProduct === 'Static Line Satellite Rates') archiveFolderName = 'Price Lists sent - Satellite';
+
+        const directPath = `${folderProduct}/${archiveFolderName}/${safeFileName}`;
+        const encodedDirect = directPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+        res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedDirect}:/content`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+    }
+
+    if (!res.ok) {
+        const searchRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root/search(q='${encodeURIComponent(safeFileName)}')`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            const match = (searchData.value || []).find(i => i.name && (i.name.toLowerCase() === safeFileName.toLowerCase() || i.name.toLowerCase().includes(safeFileName.toLowerCase())));
+            if (match) {
+                res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${match.id}/content`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+        }
+    }
 
     if (!res.ok) {
         throw new Error(`Failed to download PDF from archive: ${res.statusText}`);
