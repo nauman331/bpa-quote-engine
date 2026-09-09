@@ -169,8 +169,21 @@ const logout = async (req, res) => {
     res.json({ success: true });
 };
 
+const validateSessionToken = (token) => {
+    if (!token) return false;
+    const session = sessions.get(token);
+    if (!session) return false;
+    if (new Date(session.expiresAt) < new Date()) {
+        sessions.delete(token);
+        saveSessions(sessions);
+        return false;
+    }
+    return true;
+};
+
 module.exports = {
     login,
     getSession,
-    logout
+    logout,
+    validateSessionToken
 };

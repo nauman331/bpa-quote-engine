@@ -1,3 +1,5 @@
+const { validateSessionToken } = require('../controllers/authController');
+
 const authMiddleware = (req, res, next) => {
     const configuredKey = process.env.API_SECRET_KEY;
 
@@ -16,11 +18,16 @@ const authMiddleware = (req, res, next) => {
         providedKey = req.query.apiKey || req.query.api_key || req.query.key;
     }
 
-    if (!configuredKey || !providedKey || providedKey !== configuredKey) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
+    if (configuredKey && providedKey && providedKey === configuredKey) {
+        return next();
     }
 
-    next();
+    const sessionToken = req.headers['x-session-token'] || req.query.token || providedKey;
+    if (sessionToken && typeof validateSessionToken === 'function' && validateSessionToken(sessionToken)) {
+        return next();
+    }
+
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
 };
 
 module.exports = authMiddleware;
