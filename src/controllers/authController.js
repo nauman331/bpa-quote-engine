@@ -1,6 +1,35 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
-const sessions = new Map();
+const os = require('os');
+const legacySessionsPath = path.resolve(__dirname, '../../data/sessions.json');
+const sessionsFilePath = path.resolve(os.tmpdir(), 'bpa_sessions.json');
+
+const loadSessions = () => {
+    try {
+        if (fs.existsSync(sessionsFilePath)) {
+            const raw = fs.readFileSync(sessionsFilePath, 'utf8');
+            const parsed = JSON.parse(raw);
+            return new Map(Object.entries(parsed));
+        }
+        if (fs.existsSync(legacySessionsPath)) {
+            const raw = fs.readFileSync(legacySessionsPath, 'utf8');
+            const parsed = JSON.parse(raw);
+            return new Map(Object.entries(parsed));
+        }
+    } catch (e) {}
+    return new Map();
+};
+
+const saveSessions = (map) => {
+    try {
+        const obj = Object.fromEntries(map);
+        fs.writeFileSync(sessionsFilePath, JSON.stringify(obj, null, 2), 'utf8');
+    } catch (e) {}
+};
+
+const sessions = loadSessions();
 
 const hashPassword = (password, salt) => {
     return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -51,6 +80,7 @@ const login = async (req, res) => {
     };
 
     sessions.set(token, session);
+    saveSessions(sessions);
 
     const safeUser = {
         id: user.id,
@@ -93,6 +123,7 @@ const getSession = async (req, res) => {
 
     if (new Date(session.expiresAt) < new Date()) {
         sessions.delete(token);
+        saveSessions(sessions);
         return res.status(401).json({ error: 'Session expired' });
     }
 
@@ -132,6 +163,7 @@ const logout = async (req, res) => {
 
     if (token) {
         sessions.delete(token);
+        saveSessions(sessions);
     }
 
     res.json({ success: true });
