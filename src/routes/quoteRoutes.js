@@ -4,6 +4,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+router.post('/', authMiddleware, handleGenerateAndSend);
 router.post('/generate-and-send', authMiddleware, handleGenerateAndSend);
 router.get('/download', authMiddleware, handleDownloadQuote);
 router.get('/pending', authMiddleware, handleGetPendingQuotes);

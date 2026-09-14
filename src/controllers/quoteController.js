@@ -39,6 +39,19 @@ const handleGenerateAndSend = async (req, res) => {
 
         const pdfBuffer = await getCachedOrGeneratePdf(payload.brand, payload.productFamily, payload.tier);
 
+        if (process.env.REQUIRE_APPROVAL === 'true') {
+            const quote = await insertQuote({ leadId: null, canonicalTitle, pdfFileName });
+            if (payload.recipientEmail) {
+                await insertSend({ quoteId: quote.id, recipientEmail: payload.recipientEmail, status: 'pending_approval' });
+            }
+            await writeAuditLog('quote_staged_for_approval', { canonicalTitle, pdfFileName, recipientEmail: payload.recipientEmail || null });
+            return res.status(200).json({
+                status: 'staged',
+                message: 'Review & Confirmation Gate active: Quote generated and staged for operator approval in Pending Review queue.',
+                data: { quoteId: quote.id, canonicalTitle, pdfFileName, status: 'pending_approval' }
+            });
+        }
+
         if (canWriteSharePoint()) {
             await uploadPdfToArchive(payload.brand, payload.productFamily, pdfFileName, pdfBuffer);
         } else {
