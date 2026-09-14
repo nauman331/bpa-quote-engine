@@ -10,7 +10,11 @@ const ALLOWED_KEYS = new Set([
     'DRY_RUN',
     'ENABLE_AUTOMATION',
     'DISPATCH_EMAILS',
-    'SHAREPOINT_ARCHIVE_FOLDER'
+    'SHAREPOINT_ARCHIVE_FOLDER',
+    'REQUIRE_APPROVAL',
+    'SAFE_TEST_MODE',
+    'ALLOWED_TEST_SENDERS',
+    'RATE_TEMPLATES_FOLDER'
 ]);
 
 const getSettings = (req, res) => {
@@ -18,11 +22,16 @@ const getSettings = (req, res) => {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? "••••" + process.env.ANTHROPIC_API_KEY.slice(-4) : null,
         HUBSPOT_ACCESS_TOKEN: process.env.HUBSPOT_ACCESS_TOKEN ? "••••" + process.env.HUBSPOT_ACCESS_TOKEN.slice(-4) : null,
         AZURE_CLIENT_SECRET: process.env.AZURE_CLIENT_SECRET ? "••••" + process.env.AZURE_CLIENT_SECRET.slice(-4) : null,
+        API_SECRET_KEY: process.env.API_SECRET_KEY ? "••••" + process.env.API_SECRET_KEY.slice(-4) : null,
         ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
         DRY_RUN: process.env.DRY_RUN,
         ENABLE_AUTOMATION: process.env.ENABLE_AUTOMATION,
         DISPATCH_EMAILS: process.env.DISPATCH_EMAILS,
-        SHAREPOINT_ARCHIVE_FOLDER: process.env.SHAREPOINT_ARCHIVE_FOLDER
+        SHAREPOINT_ARCHIVE_FOLDER: process.env.SHAREPOINT_ARCHIVE_FOLDER,
+        REQUIRE_APPROVAL: process.env.REQUIRE_APPROVAL,
+        SAFE_TEST_MODE: process.env.SAFE_TEST_MODE,
+        ALLOWED_TEST_SENDERS: process.env.ALLOWED_TEST_SENDERS,
+        RATE_TEMPLATES_FOLDER: process.env.RATE_TEMPLATES_FOLDER
     });
 };
 

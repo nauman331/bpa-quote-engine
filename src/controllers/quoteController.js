@@ -3,7 +3,7 @@ const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingSer
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive, downloadPdfFromArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
-const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog, verifyDealInMirror, hasRecentQuoteForRecipient } = require('../services/supabaseService');
+const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog, verifyDealInMirror, hasRecentQuoteForRecipient, getQuoteById, updateSendStatus, getPendingQuotes } = require('../services/supabaseService');
 const { appendExcelLog } = require('../services/excelService');
 const { canDispatchEmails, canWriteSharePoint, isDryRun } = require('../utils/safetyGuards');
 
@@ -114,7 +114,108 @@ const handleDownloadQuote = async (req, res) => {
     }
 };
 
+const handleApproveQuote = async (req, res) => {
+    try {
+        const quoteId = req.params.id || req.body.quoteId;
+        if (!quoteId) return res.status(400).json({ error: 'Quote ID is required.' });
+
+        const quote = await getQuoteById(quoteId);
+        if (!quote) return res.status(404).json({ error: 'Quote not found.' });
+
+        const send = quote.sends?.[0] || {};
+        const lead = quote.leads || {};
+        const payload = lead.payload || {};
+        const recipientEmail = send.recipient_email || payload.senderEmail;
+        const clientName = payload.builderName || 'General Client';
+        const projectName = payload.projectName || 'General Works';
+        const brand = 'BPA';
+        const productFamily = 'Mobile Rates';
+        const tier = 'DD';
+
+        const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
+
+        if (canWriteSharePoint()) {
+            await uploadPdfToArchive(brand, productFamily, quote.pdf_filename, pdfBuffer);
+        }
+
+        if (recipientEmail && canDispatchEmails()) {
+            await sendQuoteEmail(
+                brand,
+                recipientEmail,
+                quote.canonical_title,
+                quote.pdf_filename,
+                pdfBuffer
+            );
+        }
+
+        await updateSendStatus(quoteId, 'sent');
+
+        if (recipientEmail && send.id) {
+            await scheduleFollowUps({
+                sendId: send.id,
+                recipientEmail,
+                canonicalTitle: quote.canonical_title,
+                brand,
+                clientName,
+                projectName,
+            });
+        }
+
+        if (canWriteSharePoint()) {
+            await appendExcelLog(quote.canonical_title, clientName, projectName, recipientEmail || 'N/A');
+        }
+
+        await writeAuditLog('quote_approved_and_sent', {
+            quoteId,
+            canonicalTitle: quote.canonical_title,
+            recipientEmail,
+            dryRun: isDryRun()
+        });
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Quote approved and dispatched successfully.',
+            data: { quoteId, canonicalTitle: quote.canonical_title }
+        });
+    } catch (err) {
+        console.error('Approve Quote Error:', err);
+        return res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+const handleRejectQuote = async (req, res) => {
+    try {
+        const quoteId = req.params.id || req.body.quoteId;
+        if (!quoteId) return res.status(400).json({ error: 'Quote ID is required.' });
+
+        await updateSendStatus(quoteId, 'rejected');
+        await writeAuditLog('quote_rejected', { quoteId });
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Quote rejected successfully.',
+            data: { quoteId }
+        });
+    } catch (err) {
+        console.error('Reject Quote Error:', err);
+        return res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
+const handleGetPendingQuotes = async (req, res) => {
+    try {
+        const pendingQuotes = await getPendingQuotes();
+        return res.status(200).json({ status: 'success', data: pendingQuotes });
+    } catch (err) {
+        console.error('Get Pending Quotes Error:', err);
+        return res.status(500).json({ status: 'error', message: err.message });
+    }
+};
+
 module.exports = {
     handleGenerateAndSend,
-    handleDownloadQuote
+    handleDownloadQuote,
+    handleApproveQuote,
+    handleRejectQuote,
+    handleGetPendingQuotes
 };

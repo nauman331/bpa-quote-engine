@@ -74,6 +74,16 @@ const handleMailboxNotification = async (req, res) => {
                 continue;
             }
 
+            if (process.env.SAFE_TEST_MODE === 'true') {
+                const senderAddr = (message.from?.emailAddress?.address || '').toLowerCase();
+                const allowedSendersStr = process.env.ALLOWED_TEST_SENDERS;
+                const allowedSenders = allowedSendersStr ? allowedSendersStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+                if (allowedSenders.length > 0 && !allowedSenders.includes(senderAddr)) {
+                    console.log(`[Mailbox] [SAFE TEST MODE] Skipping email from non-whitelisted sender: ${senderAddr}`);
+                    continue;
+                }
+            }
+
             const parsed = parseInboundEmail(message);
 
             const aiAnalysis = await analyzeLeadEmail(parsed.subject, parsed.rawBody);
@@ -118,6 +128,14 @@ const handleMailboxNotification = async (req, res) => {
             }
 
             const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
+
+            if (process.env.REQUIRE_APPROVAL === 'true') {
+                const quote = await insertQuote({ leadId: lead.id, canonicalTitle, pdfFileName });
+                await insertSend({ quoteId: quote.id, recipientEmail, status: 'pending_approval' });
+                await writeAuditLog('quote_staged_for_approval', { canonicalTitle, pdfFileName, recipientEmail, source: parsed.source, urgency: aiAnalysis.urgency });
+                console.log(`[Mailbox] ⏸️  Quote staged for review (REQUIRE_APPROVAL=true): ${canonicalTitle} → ${recipientEmail}`);
+                continue;
+            }
 
             if (canWriteSharePoint()) {
                 await uploadPdfToArchive(brand, productFamily, pdfFileName, pdfBuffer);

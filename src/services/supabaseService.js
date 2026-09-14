@@ -104,7 +104,41 @@ const getRecentLeads = async (limit = 50) => {
 
 const getRecentQuotes = async (limit = 50) => {
     const db = getClient();
-    const { data, error } = await db.from('quotes').select('*, leads(*)').order('created_at', { ascending: false }).limit(limit);
+    const { data, error } = await db.from('quotes').select('*, leads(*), sends(*)').order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data;
+};
+
+const getPendingQuotes = async (limit = 50) => {
+    const db = getClient();
+    const { data, error } = await db
+        .from('quotes')
+        .select('*, leads(*), sends!inner(*)')
+        .eq('sends.status', 'pending_approval')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) throw error;
+    return data || [];
+};
+
+const getQuoteById = async (quoteId) => {
+    const db = getClient();
+    const { data, error } = await db
+        .from('quotes')
+        .select('*, leads(*), sends(*)')
+        .eq('id', quoteId)
+        .single();
+    if (error) throw error;
+    return data;
+};
+
+const updateSendStatus = async (quoteId, status) => {
+    const db = getClient();
+    const { data, error } = await db
+        .from('sends')
+        .update({ status })
+        .eq('quote_id', quoteId)
+        .select();
     if (error) throw error;
     return data;
 };
@@ -118,15 +152,17 @@ const getPendingFollowUps = async (limit = 50) => {
 
 const getDashboardStats = async () => {
     const db = getClient();
-    const [leadsReq, quotesReq, pendingReq] = await Promise.all([
+    const [leadsReq, quotesReq, pendingReq, approvalReq] = await Promise.all([
         db.from('leads').select('*', { count: 'exact', head: true }),
         db.from('quotes').select('*', { count: 'exact', head: true }),
-        db.from('follow_ups').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+        db.from('follow_ups').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        db.from('sends').select('*', { count: 'exact', head: true }).eq('status', 'pending_approval')
     ]);
     return {
         totalLeads: leadsReq.count || 0,
         totalQuotesSent: quotesReq.count || 0,
         pendingFollowUps: pendingReq.count || 0,
+        pendingApprovals: approvalReq.count || 0,
     };
 };
 
@@ -181,6 +217,9 @@ module.exports = {
     markFollowUpSent,
     getRecentLeads,
     getRecentQuotes,
+    getPendingQuotes,
+    getQuoteById,
+    updateSendStatus,
     getPendingFollowUps,
     getDashboardStats,
     verifyDealInMirror,

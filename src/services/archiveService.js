@@ -14,7 +14,9 @@ const getFolderPaths = (brand, productFamily, tier) => {
     if (tier === 'FD') folderTier = 'LEVEL F CONDITIONS D';
 
     let templateFolderPath = folderProduct;
-    if (folderProduct === 'Mobile Pumps') {
+    if (process.env.RATE_TEMPLATES_FOLDER) {
+        templateFolderPath = process.env.RATE_TEMPLATES_FOLDER;
+    } else if (folderProduct === 'Mobile Pumps') {
         templateFolderPath += `/${folderTier}`;
     }
 
