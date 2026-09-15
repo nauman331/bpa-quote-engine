@@ -116,7 +116,16 @@ const handleDownloadQuote = async (req, res) => {
         const { file } = req.query;
         if (!file) return res.status(400).json({ error: 'file query parameter is required' });
 
-        const pdfBuffer = await downloadPdfFromArchive(file);
+        let pdfBuffer;
+        try {
+            pdfBuffer = await downloadPdfFromArchive(file);
+        } catch {
+            const brand = (file || '').toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
+            let productFamily = 'Mobile Pumps';
+            if ((file || '').toLowerCase().includes('spider')) productFamily = 'Spider';
+            if ((file || '').toLowerCase().includes('satellite')) productFamily = 'Satellite';
+            pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, null);
+        }
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `inline; filename="${file}"`);
