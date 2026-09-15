@@ -7,6 +7,7 @@ const mailboxRoutes = require('./routes/mailboxRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const { restoreSettingsFromDb } = require('./controllers/settingsController');
 const authRoutes = require('./routes/authRoutes');
 const { createOrRenewSubscription } = require('./services/mailboxService');
 const { runFollowUpCron } = require('./services/followUpService');
@@ -26,6 +27,7 @@ const startApp = () => {
 
     app.listen(PORT, async () => {
         console.log(`BPA Quote Engine running on port ${PORT}`);
+        await restoreSettingsFromDb();
 
         const isAutomationEnabled = process.env.ENABLE_AUTOMATION === 'true';
 
