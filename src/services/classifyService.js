@@ -43,7 +43,8 @@ const analyzeLeadEmail = async (subject, body) => {
         };
     }
 
-        const modelName = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest';
+    try {
+        const modelName = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
         const response = await getClient().messages.create({
             model: modelName,
             max_tokens: 256,
