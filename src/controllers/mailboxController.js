@@ -61,17 +61,24 @@ const processMessage = async (message) => {
 
     console.log(`[Mailbox] Final Lead: source=${parsed.source}, builder=${finalBuilderName}, project=${finalProjectName}`);
 
-    const lead = await insertLead({
-        source: parsed.source,
-        payload: { ...parsed, builderName: finalBuilderName, projectName: finalProjectName },
-        urgency: aiAnalysis.urgency,
-        urgencyReason: aiAnalysis.reason,
-    });
-
     const brand = 'BPA';
     const productFamily = aiAnalysis.productFamily || 'Mobile Rates';
     const tier = 'DD';
     const recipientEmail = parsed.senderEmail;
+
+    const lead = await insertLead({
+        source: parsed.source,
+        payload: {
+            ...parsed,
+            builderName: finalBuilderName,
+            projectName: finalProjectName,
+            productFamily,
+            brand,
+            tier
+        },
+        urgency: aiAnalysis.urgency,
+        urgencyReason: aiAnalysis.reason,
+    });
 
     if (!recipientEmail) {
         console.warn(`[Mailbox] No sender email — cannot send quote for lead ${lead.id}`);

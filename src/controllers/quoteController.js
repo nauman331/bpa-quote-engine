@@ -3,7 +3,7 @@ const { buildCanonicalTitle, buildPdfFileName } = require('../services/namingSer
 const { getCachedOrGeneratePdf } = require('../services/documentService');
 const { uploadPdfToArchive, downloadPdfFromArchive } = require('../services/archiveService');
 const { sendQuoteEmail } = require('../services/mailService');
-const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog, verifyDealInMirror, hasRecentQuoteForRecipient, getQuoteById, updateSendStatus, getPendingQuotes } = require('../services/supabaseService');
+const { insertQuote, insertSend, scheduleFollowUps, writeAuditLog, verifyDealInMirror, hasRecentQuoteForRecipient, getQuoteById, updateSendStatus, getPendingQuotes, getClient } = require('../services/supabaseService');
 const { appendExcelLog } = require('../services/excelService');
 const { canDispatchEmails, canWriteSharePoint, isDryRun } = require('../utils/safetyGuards');
 
@@ -121,10 +121,27 @@ const handleDownloadQuote = async (req, res) => {
             pdfBuffer = await downloadPdfFromArchive(file);
         } catch {
             const brand = (file || '').toLowerCase().includes('gcpa') ? 'GCPA' : 'BPA';
-            let productFamily = 'Mobile Pumps';
-            if ((file || '').toLowerCase().includes('spider')) productFamily = 'Spider';
-            if ((file || '').toLowerCase().includes('satellite')) productFamily = 'Satellite';
-            pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, null);
+            let productFamily = 'Mobile Rates';
+            let tier = 'DD';
+            try {
+                const supabase = getClient();
+                const { data: quoteMatch } = await supabase
+                    .from('quotes')
+                    .select('leads(payload)')
+                    .eq('pdf_filename', file)
+                    .maybeSingle();
+                if (quoteMatch?.leads?.payload?.productFamily) {
+                    productFamily = quoteMatch.leads.payload.productFamily;
+                }
+                if (quoteMatch?.leads?.payload?.tier) {
+                    tier = quoteMatch.leads.payload.tier;
+                }
+            } catch {}
+            if (productFamily === 'Mobile Rates') {
+                if ((file || '').toLowerCase().includes('spider')) productFamily = 'Spider Boom';
+                if ((file || '').toLowerCase().includes('satellite')) productFamily = 'Static Line Satellite Rates';
+            }
+            pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
         }
 
         res.setHeader('Content-Type', 'application/pdf');
@@ -150,9 +167,9 @@ const handleApproveQuote = async (req, res) => {
         const recipientEmail = send.recipient_email || payload.senderEmail;
         const clientName = payload.builderName || 'General Client';
         const projectName = payload.projectName || 'General Works';
-        const brand = 'BPA';
-        const productFamily = 'Mobile Rates';
-        const tier = 'DD';
+        const brand = payload.brand || 'BPA';
+        const productFamily = payload.productFamily || 'Mobile Rates';
+        const tier = payload.tier || 'DD';
 
         const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
 
