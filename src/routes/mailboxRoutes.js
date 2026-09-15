@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { handleMailboxNotification } = require('../controllers/mailboxController');
+const { handleMailboxNotification, handleSyncMailbox } = require('../controllers/mailboxController');
 const { fetchRecentMessages } = require('../services/mailboxService');
 const authMiddleware = require('../middleware/authMiddleware');
 const { isAutomationEnabled } = require('../utils/safetyGuards');
 
 router.get('/mailbox', handleMailboxNotification);
 router.post('/mailbox', handleMailboxNotification);
+router.post('/sync', handleSyncMailbox);
+router.get('/sync', handleSyncMailbox);
 
 router.get('/recent', authMiddleware, async (req, res) => {
     if (!isAutomationEnabled()) {
