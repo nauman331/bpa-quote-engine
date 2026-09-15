@@ -36,7 +36,7 @@ const restoreSettingsFromDb = async () => {
                 }
             }
         }
-    } catch {}
+    } catch { }
 };
 
 const getSettings = async (req, res) => {
@@ -90,7 +90,7 @@ const updateSettings = async (req, res) => {
 
     try {
         fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf8');
-    } catch {}
+    } catch { }
 
     try {
         const supabase = getClient();
@@ -104,7 +104,7 @@ const updateSettings = async (req, res) => {
             event_type: 'system_settings_snapshot',
             payload: snapshot
         });
-    } catch {}
+    } catch { }
 
     res.json({ success: true, message: "Settings updated successfully." });
 };
