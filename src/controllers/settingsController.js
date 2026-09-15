@@ -72,7 +72,7 @@ const updateSettings = async (req, res) => {
         if (value === undefined || value === null) return;
 
         const cleanVal = String(value).replace(/[\r\n]/g, '').trim();
-        if (!cleanVal) return;
+        if (!cleanVal || cleanVal.startsWith('••••') || cleanVal.startsWith('****')) return;
 
         process.env[key] = cleanVal;
 
