@@ -91,8 +91,12 @@ const processMessage = async (message) => {
 
     const isDuplicate = await hasRecentQuoteForRecipient(recipientEmail, canonicalTitle);
     if (isDuplicate) {
-        console.log(`[Mailbox] Duplicate quote prevented: ${canonicalTitle} already dispatched to ${recipientEmail} in last 24h.`);
-        return lead;
+        if (process.env.SAFE_TEST_MODE === 'true') {
+            console.log(`[Mailbox] 🧪 [SAFE TEST MODE] Duplicate quote would be prevented in production (${canonicalTitle} to ${recipientEmail}), but proceeding for test mode.`);
+        } else {
+            console.log(`[Mailbox] Duplicate quote prevented: ${canonicalTitle} already dispatched to ${recipientEmail} in last 24h.`);
+            return lead;
+        }
     }
 
     const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);

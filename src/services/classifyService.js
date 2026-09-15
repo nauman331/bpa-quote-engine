@@ -43,8 +43,7 @@ const analyzeLeadEmail = async (subject, body) => {
         };
     }
 
-    try {
-        const modelName = process.env.ANTHROPIC_MODEL;
+        const modelName = process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest';
         const response = await getClient().messages.create({
             model: modelName,
             max_tokens: 256,
@@ -57,12 +56,14 @@ const analyzeLeadEmail = async (subject, body) => {
             ]
         });
 
-        const raw = response.content[0].text.trim()
+        const textBlock = (response?.content || []).find(c => c.type === 'text');
+        const textContent = textBlock?.text || response?.content?.[0]?.text || '';
+        const raw = textContent.trim()
             .replace(/^```json\s*/i, '')
             .replace(/^```\s*/i, '')
             .replace(/\s*```$/, '')
             .trim();
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(raw || '{}');
         console.log(`[Classify] model=${modelName} | isLead=${parsed.isLead} | urgency=${parsed.urgency} | builder=${parsed.builderName}`);
         return parsed;
     } catch (err) {
