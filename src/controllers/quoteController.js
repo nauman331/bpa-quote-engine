@@ -130,11 +130,17 @@ const handleDownloadQuote = async (req, res) => {
                     .select('leads(payload)')
                     .eq('pdf_filename', file)
                     .maybeSingle();
-                if (quoteMatch?.leads?.payload?.productFamily) {
-                    productFamily = quoteMatch.leads.payload.productFamily;
+                const payload = quoteMatch?.leads?.payload || {};
+                if (payload.productFamily) {
+                    productFamily = payload.productFamily;
                 }
-                if (quoteMatch?.leads?.payload?.tier) {
-                    tier = quoteMatch.leads.payload.tier;
+                if (payload.tier) {
+                    tier = payload.tier;
+                }
+                if (productFamily === 'Mobile Rates') {
+                    const text = `${payload.subject || ''} ${payload.rawBody || ''} ${file || ''}`.toLowerCase();
+                    if (text.includes('spider')) productFamily = 'Spider Boom';
+                    if (text.includes('satellite') || text.includes('static line')) productFamily = 'Static Line Satellite Rates';
                 }
             } catch {}
             if (productFamily === 'Mobile Rates') {
@@ -168,7 +174,12 @@ const handleApproveQuote = async (req, res) => {
         const clientName = payload.builderName || 'General Client';
         const projectName = payload.projectName || 'General Works';
         const brand = payload.brand || 'BPA';
-        const productFamily = payload.productFamily || 'Mobile Rates';
+        let productFamily = payload.productFamily || 'Mobile Rates';
+        if (productFamily === 'Mobile Rates') {
+            const text = `${payload.subject || ''} ${payload.rawBody || ''} ${quote.canonical_title || ''}`.toLowerCase();
+            if (text.includes('spider')) productFamily = 'Spider Boom';
+            if (text.includes('satellite') || text.includes('static line')) productFamily = 'Static Line Satellite Rates';
+        }
         const tier = payload.tier || 'DD';
 
         const pdfBuffer = await getCachedOrGeneratePdf(brand, productFamily, tier);
